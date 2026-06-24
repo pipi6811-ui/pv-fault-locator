@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PV 串列接地故障定位器</title>
+<meta name="description" content="太陽能串列接地故障定位現場工具，輸入對地電壓即時算出漏點位置。離線可用。">
+<meta name="theme-color" content="#14181B">
+<!-- 加入主畫面（Android / Chrome） -->
+<link rel="manifest" href="manifest.webmanifest">
+<!-- 加入主畫面（iOS Safari） -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="故障定位">
+<link rel="apple-touch-icon" href="icon-192.png">
+<!-- 瀏覽器分頁小圖示 -->
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<style>
+  :root{
+    --bg:#E7E4DC;
+    --panel:#FBFAF7;
+    --ink:#14181B;
+    --ink-soft:#565B5F;
+    --line:#CFCBC1;
+    --line-strong:#A9A498;
+    --lcd:#BFC9B4;
+    --lcd-deep:#222A1E;
+    --lcd-shadow:#A6B199;
+    --hazard:#F4C20D;
+    --amber:#A8690A;
+    --green:#1E7A46;
+    --green-bg:#E2F0E6;
+    --amber-bg:#F8ECCF;
+    --danger:#B23B30;
+    --danger-bg:#F6E2DF;
+    --mono:"SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.55;
+    padding:0 0 env(safe-area-inset-bottom);
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:0 14px 48px;}
+
+  /* ---- instrument header ---- */
+  header{
+    margin:14px 0 16px;
+    border:2px solid var(--ink);
+    background:var(--panel);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .plate{
+    display:flex;align-items:baseline;justify-content:space-between;
+    gap:10px;padding:13px 15px 11px;
+  }
+  .plate h1{
+    font-size:18px;font-weight:800;letter-spacing:-.02em;margin:0;
+  }
+  .tag{
+    font-family:var(--mono);font-size:10px;font-weight:600;
+    letter-spacing:.12em;color:var(--ink-soft);
+    border:1px solid var(--line-strong);border-radius:4px;
+    padding:2px 6px;white-space:nowrap;
+  }
+  .hazard{
+    display:flex;align-items:center;gap:8px;
+    background:var(--hazard);color:#14181B;
+    font-size:12.5px;font-weight:700;
+    padding:8px 15px;
+    border-top:2px solid var(--ink);
+  }
+  .hazard svg{flex:0 0 auto;}
+
+  /* ---- section frame ---- */
+  section{
+    background:var(--panel);
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    margin-bottom:14px;
+    overflow:hidden;
+  }
+  .sec-head{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 14px;
+    border-bottom:1.5px solid var(--line);
+    background:#F2F0EA;
+  }
+  .sec-head .num{
+    font-family:var(--mono);font-size:12px;font-weight:700;
+    background:var(--ink);color:var(--panel);
+    width:20px;height:20px;border-radius:5px;
+    display:grid;place-items:center;flex:0 0 auto;
+  }
+  .sec-head h2{font-size:14px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .sec-body{padding:14px;}
+
+  /* ---- measurement diagram ---- */
+  .diagram{width:100%;height:auto;display:block;}
+  .legend{
+    display:grid;grid-template-columns:1fr;gap:7px;margin-top:12px;
+  }
+  .leg{
+    display:flex;align-items:center;gap:9px;
+    font-size:12.5px;color:var(--ink-soft);
+  }
+  .leg b{color:var(--ink);font-family:var(--mono);font-size:12px;
+    border:1px solid var(--line-strong);border-radius:4px;padding:1px 5px;flex:0 0 auto;}
+
+  /* ---- inputs ---- */
+  .field{margin-bottom:13px;}
+  .field:last-child{margin-bottom:0;}
+  .field label{
+    display:flex;align-items:baseline;gap:7px;
+    font-size:13px;font-weight:600;margin-bottom:5px;
+  }
+  .field label .sym{
+    font-family:var(--mono);font-weight:700;color:var(--ink);
+  }
+  .field label .opt{
+    font-size:11px;font-weight:600;color:var(--ink-soft);
+    border:1px solid var(--line-strong);border-radius:4px;padding:0 5px;
+  }
+  .input-row{display:flex;align-items:stretch;}
+  .input-row input{
+    flex:1;min-width:0;
+    font-family:var(--mono);font-size:26px;font-weight:600;
+    text-align:right;
+    padding:11px 13px;
+    border:2px solid var(--line-strong);
+    border-right:none;
+    border-radius:9px 0 0 9px;
+    background:#fff;color:var(--ink);
+    -moz-appearance:textfield;
+  }
+  .input-row input::-webkit-outer-spin-button,
+  .input-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .input-row input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,24,27,.12);}
+  .input-row .unit{
+    display:grid;place-items:center;
+    font-family:var(--mono);font-size:14px;font-weight:600;color:var(--ink-soft);
+    min-width:56px;padding:0 12px;
+    border:2px solid var(--line-strong);
+    border-radius:0 9px 9px 0;
+    background:#F2F0EA;
+  }
+  .input-row input:focus + .unit{border-color:var(--ink);}
+
+  .btnrow{display:flex;gap:10px;margin-top:15px;}
+  button{
+    font-family:var(--sans);font-size:15px;font-weight:700;
+    padding:13px 16px;border-radius:9px;cursor:pointer;
+    border:2px solid var(--ink);
+  }
+  .btn-reset{
+    flex:0 0 auto;background:var(--panel);color:var(--ink);
+  }
+  .btn-reset:active{background:#EBE8E1;}
+
+  /* ---- LCD readout (signature) ---- */
+  .readout{
+    border:2px solid var(--ink);
+    border-radius:10px;
+    background:var(--lcd);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.35),inset 0 -3px 7px var(--lcd-shadow);
+    padding:16px 16px 18px;
+    margin-bottom:14px;
+  }
+  .ro-empty{
+    font-size:13px;color:#3c4636;text-align:center;padding:14px 6px;font-weight:600;
+  }
+  .ro-label{
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    color:#3c4636;font-weight:700;text-transform:uppercase;
+  }
+  .ro-main{
+    display:flex;align-items:baseline;gap:10px;margin:2px 0 4px;
+  }
+  .ro-pre{font-size:16px;font-weight:700;color:var(--lcd-deep);}
+  .ro-num{
+    font-family:var(--mono);font-weight:700;
+    font-size:62px;line-height:1;color:var(--lcd-deep);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+  }
+  .ro-suf{font-size:18px;font-weight:700;color:var(--lcd-deep);}
+  .ro-sub{font-size:13px;color:#34402d;font-weight:600;}
+  .ro-raw{font-family:var(--mono);font-size:12px;color:#46523c;margin-top:2px;}
+
+  /* ---- string diagram ---- */
+  .string-wrap{margin-top:14px;}
+  .string-ends{
+    display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:12px;font-weight:700;color:var(--lcd-deep);
+    margin-bottom:5px;
+  }
+  .string{
+    display:flex;gap:3px;overflow-x:auto;padding-bottom:3px;
+    scrollbar-width:thin;
+  }
+  .cell{
+    flex:1 0 auto;min-width:20px;height:34px;
+    border:1.5px solid #5d6653;border-radius:3px;
+    background:#D5DCCB;
+    display:grid;place-items:center;
+    font-family:var(--mono);font-size:10px;font-weight:600;color:#46523c;
+  }
+  .cell.near{background:#F8E6A6;border-color:#b89a3a;color:#6a5410;}
+  .cell.hit{
+    background:var(--hazard);border-color:#14181B;border-width:2px;
+    color:#14181B;font-weight:800;font-size:11px;
+    box-shadow:0 0 0 2px rgba(20,24,27,.18);
+  }
+  .string-note{
+    font-size:12px;color:#34402d;font-weight:600;margin-top:7px;
+    display:flex;align-items:center;gap:6px;
+  }
+  .swatch{width:13px;height:13px;border-radius:3px;flex:0 0 auto;border:1.5px solid #14181B;}
+
+  /* ---- verdict badge ---- */
+  .verdict{
+    display:flex;gap:11px;align-items:flex-start;
+    border:1.5px solid;border-radius:9px;padding:12px 13px;margin-bottom:13px;
+  }
+  .verdict .ico{flex:0 0 auto;width:26px;height:26px;border-radius:50%;
+    display:grid;place-items:center;font-weight:800;font-size:15px;color:#fff;}
+  .verdict h3{margin:0 0 3px;font-size:14px;font-weight:800;}
+  .verdict p{margin:0;font-size:12.5px;line-height:1.5;}
+  .verdict.good{background:var(--green-bg);border-color:#9ccbac;}
+  .verdict.good .ico{background:var(--green);}
+  .verdict.good h3{color:var(--green);}
+  .verdict.warn{background:var(--amber-bg);border-color:#e0c277;}
+  .verdict.warn .ico{background:var(--amber);}
+  .verdict.warn h3{color:var(--amber);}
+  .verdict.bad{background:var(--danger-bg);border-color:#dba59e;}
+  .verdict.bad .ico{background:var(--danger);}
+  .verdict.bad h3{color:var(--danger);}
+
+  /* ---- checklist ---- */
+  .check{list-style:none;margin:0;padding:0;}
+  .check li{
+    display:flex;align-items:flex-start;gap:10px;
+    padding:9px 2px;border-bottom:1px solid var(--line);
+    font-size:13.5px;
+  }
+  .check li:last-child{border-bottom:none;}
+  .box{
+    flex:0 0 auto;width:20px;height:20px;border:2px solid var(--line-strong);
+    border-radius:4px;margin-top:1px;background:#fff;cursor:pointer;
+    display:grid;place-items:center;
+  }
+  .box.on{background:var(--ink);border-color:var(--ink);}
+  .box.on::after{content:"";width:5px;height:9px;border:solid #fff;
+    border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px);}
+  .check li.done span{color:var(--ink-soft);text-decoration:line-through;}
+
+  .note{
+    font-size:12.5px;color:var(--ink-soft);line-height:1.6;
+    background:#F2F0EA;border-radius:8px;padding:11px 13px;margin-top:12px;
+  }
+  .note b{color:var(--ink);}
+  .formula{
+    font-family:var(--mono);font-size:12px;color:var(--ink);
+    background:#EEEBE3;border:1px solid var(--line);border-radius:7px;
+    padding:9px 11px;margin-top:11px;overflow-x:auto;white-space:nowrap;
+  }
+  .hidden{display:none!important;}
+  @media (prefers-reduced-motion:no-preference){
+    .ro-num{transition:none;}
+    .cell{transition:background .12s ease,border-color .12s ease;}
+  }
+  footer{text-align:center;font-size:11px;color:var(--ink-soft);
+    font-family:var(--mono);margin-top:6px;letter-spacing:.04em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="plate">
+      <h1>串列接地故障定位器</h1>
+      <span class="tag">PV ISO&middot;FAULT</span>
+    </div>
+    <div class="hazard">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#14181B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 1 21h22L12 2z"/><line x1="12" y1="9" x2="12" y2="14"/><line x1="12" y1="17.5" x2="12" y2="17.5"/></svg>
+      量測前先 DC 隔離、其餘串列開關 OFF、戴絕緣手套
+    </div>
+  </header>
+
+  <!-- 1. 量測點 -->
+  <section>
+    <div class="sec-head"><span class="num">1</span><h2>要量哪三個值</h2></div>
+    <div class="sec-body">
+      <svg class="diagram" viewBox="0 0 340 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="量測點示意圖">
+        <!-- string box -->
+        <rect x="40" y="40" width="260" height="34" rx="4" fill="#D5DCCB" stroke="#14181B" stroke-width="2"/>
+        <!-- module divisions -->
+        <g stroke="#8a9180" stroke-width="1">
+          <line x1="92" y1="40" x2="92" y2="74"/><line x1="144" y1="40" x2="144" y2="74"/>
+          <line x1="196" y1="40" x2="196" y2="74"/><line x1="248" y1="40" x2="248" y2="74"/>
+        </g>
+        <text x="170" y="62" text-anchor="middle" font-family="monospace" font-size="11" fill="#46523c" font-weight="700">PV STRING</text>
+        <!-- + terminal -->
+        <circle cx="40" cy="57" r="4" fill="#14181B"/>
+        <text x="26" y="34" text-anchor="middle" font-family="monospace" font-size="15" font-weight="800" fill="#14181B">+</text>
+        <!-- - terminal -->
+        <circle cx="300" cy="57" r="4" fill="#14181B"/>
+        <text x="314" y="34" text-anchor="middle" font-family="monospace" font-size="15" font-weight="800" fill="#14181B">&minus;</text>
+        <!-- earth -->
+        <line x1="170" y1="98" x2="170" y2="116" stroke="#14181B" stroke-width="2"/>
+        <g stroke="#14181B" stroke-width="2" stroke-linecap="round">
+          <line x1="156" y1="116" x2="184" y2="116"/><line x1="161" y1="121" x2="179" y2="121"/><line x1="166" y1="126" x2="174" y2="126"/>
+        </g>
+        <text x="170" y="146" text-anchor="middle" font-family="monospace" font-size="10" fill="#565B5F" font-weight="700">EARTH / 接地外框</text>
+        <!-- Voc arc (P-N) -->
+        <path d="M40 28 Q170 10 300 28" fill="none" stroke="#565B5F" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="170" y="20" text-anchor="middle" font-family="monospace" font-size="10" fill="#565B5F" font-weight="700">Voc (P&minus;N)</text>
+        <!-- V_PE : + to earth -->
+        <path d="M40 57 Q80 92 162 108" fill="none" stroke="#0B6BCB" stroke-width="2"/>
+        <text x="78" y="103" text-anchor="middle" font-family="monospace" font-size="11" fill="#0B6BCB" font-weight="800">V(P&minus;E)</text>
+        <!-- V_NE : - to earth -->
+        <path d="M300 57 Q260 92 178 108" fill="none" stroke="#C25608" stroke-width="2"/>
+        <text x="262" y="103" text-anchor="middle" font-family="monospace" font-size="11" fill="#C25608" font-weight="800">V(N&minus;E)</text>
+      </svg>
+      <div class="legend">
+        <div class="leg"><b style="color:#0B6BCB;border-color:#0B6BCB">V(P&minus;E)</b> 正極 PV+ 對地（接地/外框）電壓</div>
+        <div class="leg"><b style="color:#C25608;border-color:#C25608">V(N&minus;E)</b> 負極 PV&minus; 對地電壓</div>
+        <div class="leg"><b>Voc</b> 整串開路電壓（選填，用來判定軟/硬性故障）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 輸入 -->
+  <section>
+    <div class="sec-head"><span class="num">2</span><h2>輸入量測值</h2></div>
+    <div class="sec-body">
+      <div class="field">
+        <label><span class="sym" style="color:#0B6BCB">V(P&minus;E)</span> 正極對地電壓</label>
+        <div class="input-row">
+          <input id="vpe" type="number" inputmode="decimal" placeholder="0" aria-label="正極對地電壓">
+          <span class="unit">V</span>
+        </div>
+      </div>
+      <div class="field">
+        <label><span class="sym" style="color:#C25608">V(N&minus;E)</span> 負極對地電壓</label>
+        <div class="input-row">
+          <input id="vne" type="number" inputmode="decimal" placeholder="0" aria-label="負極對地電壓">
+          <span class="unit">V</span>
+        </div>
+      </div>
+      <div class="field">
+        <label><span class="sym">n</span> 串列模組片數</label>
+        <div class="input-row">
+          <input id="n" type="number" inputmode="numeric" placeholder="0" aria-label="串列模組片數">
+          <span class="unit">片</span>
+        </div>
+      </div>
+      <div class="field">
+        <label><span class="sym">Voc</span> 整串開路電壓 <span class="opt">選填</span></label>
+        <div class="input-row">
+          <input id="voc" type="number" inputmode="decimal" placeholder="0" aria-label="整串開路電壓">
+          <span class="unit">V</span>
+        </div>
+      </div>
+      <div class="btnrow">
+        <button class="btn-reset" id="reset" type="button">重新量測</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 結果 -->
+  <div class="readout" id="readout">
+    <div class="ro-empty" id="roEmpty">輸入 V(P&minus;E)、V(N&minus;E) 與片數 n，<br>下方即時顯示漏點位置與檢查重點。</div>
+    <div id="roResult" class="hidden">
+      <div class="ro-label">漏點位置（從 PV+ 端數）</div>
+      <div class="ro-main">
+        <span class="ro-pre">第</span>
+        <span class="ro-num" id="mMain">--</span>
+        <span class="ro-suf">片</span>
+      </div>
+      <div class="ro-sub" id="mZone"></div>
+      <div class="ro-raw" id="mRaw"></div>
+      <div class="string-wrap">
+        <div class="string-ends"><span>PV+ 第1片</span><span id="endN">第n片 PV&minus;</span></div>
+        <div class="string" id="string"></div>
+        <div class="string-note"><span class="swatch" style="background:var(--hazard)"></span>主攻片　<span class="swatch" style="background:#F8E6A6;border-color:#b89a3a"></span>連帶檢查</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- verdict + checklist (hidden until result) -->
+  <div id="afterResult" class="hidden">
+    <section>
+      <div class="sec-head"><span class="num">3</span><h2>故障類型判定</h2></div>
+      <div class="sec-body">
+        <div class="verdict" id="verdict">
+          <div class="ico" id="vIco">!</div>
+          <div><h3 id="vTitle"></h3><p id="vDesc"></p></div>
+        </div>
+        <div class="formula" id="formulaLine"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">4</span><h2>現場檢查點</h2></div>
+      <div class="sec-body">
+        <ul class="check" id="checklist">
+          <li><span class="box"></span><span>到目標片區，逐一拆開 MC4 接頭，看積水 / 氧化 / 壓接不良 / 公母頭混接</span></li>
+          <li><span class="box"></span><span>檢查模組接線盒：龜裂、矽膠老化、進水痕跡</span></li>
+          <li><span class="box"></span><span>檢查該段電纜：磨破、動物咬損、UV 龜裂、被結構件夾壓</span></li>
+          <li><span class="box"></span><span>受潮型可在懷疑點灑水重現，邊灑邊看 Riso / 對地電壓變化</span></li>
+          <li><span class="box"></span><span>修復後回量 V(P&minus;E)、V(N&minus;E)，確認兩者相加是否回到接近 Voc</span></li>
+        </ul>
+        <div class="note">
+          <b>定位前提：</b>此公式假設「單一漏點」。若整串多處同時漏電，m 會亂跳算不準——這時改用注入訊號的走線追蹤儀（如 Fluke GFL-1500）較可靠。
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>m = |V(P&minus;E)| / (|V(P&minus;E)|+|V(N&minus;E)|) &times; n<br>v1.0 &middot; 更新 2026-06-24 &middot; 離線可用</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  var vpeEl=$("vpe"),vneEl=$("vne"),nEl=$("n"),vocEl=$("voc");
+  var roEmpty=$("roEmpty"),roResult=$("roResult"),afterResult=$("afterResult");
+  var mMain=$("mMain"),mZone=$("mZone"),mRaw=$("mRaw"),stringEl=$("string"),endN=$("endN");
+  var verdict=$("verdict"),vIco=$("vIco"),vTitle=$("vTitle"),vDesc=$("vDesc"),formulaLine=$("formulaLine");
+
+  function num(el){var v=parseFloat(el.value);return isNaN(v)?null:v;}
+  function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
+  function showEmpty(){
+    roEmpty.classList.remove("hidden");
+    roResult.classList.add("hidden");
+    afterResult.classList.add("hidden");
+  }
+
+  function calc(){
+    var vpeRaw=num(vpeEl),vneRaw=num(vneEl),nRaw=num(nEl),voc=num(vocEl);
+    if(vpeRaw===null||vneRaw===null||nRaw===null||nRaw<1){showEmpty();return;}
+    var vpe=Math.abs(vpeRaw),vne=Math.abs(vneRaw),n=Math.round(nRaw);
+    var sum=vpe+vne;
+    if(sum<=0){showEmpty();return;}
+
+    var m=vpe/sum*n;                       // 從 PV+ 端起算
+    var main=clamp(Math.round(m),1,n);
+
+    // ---- 軟/硬性故障判定 + 檢查範圍寬度 ----
+    var spread=1, vType="unknown";
+    if(voc!==null&&voc>0){
+      var ratio=sum/voc;
+      if(ratio>=0.92){vType="hard";spread=1;}
+      else{vType="soft";spread=2;}
+    }else{vType="none";spread=1;}
+
+    var lo=clamp(main-spread,1,n), hi=clamp(main+spread,1,n);
+
+    // ---- 輸出主結果 ----
+    roEmpty.classList.add("hidden");
+    roResult.classList.remove("hidden");
+    afterResult.classList.remove("hidden");
+    mMain.textContent=main;
+    endN.textContent="第"+n+"片 PV\u2212";
+    mZone.textContent = (lo===hi) ? ("重點檢查第 "+main+" 片")
+                                  : ("重點檢查第 "+lo+" ～ "+hi+" 片（主攻第 "+main+" 片）");
+    mRaw.textContent="計算值 m = "+m.toFixed(2)+"　|　V(P-E)+V(N-E) = "+sum.toFixed(1)+" V";
+
+    // ---- 串列示意圖 ----
+    stringEl.innerHTML="";
+    for(var i=1;i<=n;i++){
+      var c=document.createElement("div");
+      c.className="cell";
+      if(i===main)c.className+=" hit";
+      else if(i>=lo&&i<=hi)c.className+=" near";
+      c.textContent=i;
+      stringEl.appendChild(c);
+    }
+    // 自動捲到主攻片
+    var hitEl=stringEl.querySelector(".hit");
+    if(hitEl&&stringEl.scrollWidth>stringEl.clientWidth){
+      stringEl.scrollLeft=hitEl.offsetLeft-stringEl.clientWidth/2+hitEl.clientWidth/2;
+    }
+
+    // ---- 極性方向提示 ----
+    var dir;
+    if(m<=1) dir="漏點靠近 PV+ 端（串首），檢查第一片附近接頭。";
+    else if(m>=n-1) dir="漏點靠近 PV\u2212 端（串尾），檢查最末片附近接頭。";
+    else dir="漏點在串列中段。";
+
+    // ---- 判定卡 ----
+    formulaLine.textContent="m = "+vpe.toFixed(1)+" / ("+vpe.toFixed(1)+" + "+vne.toFixed(1)+") \u00D7 "+n+" = "+m.toFixed(2);
+
+    if(vType==="hard"){
+      verdict.className="verdict good";vIco.textContent="\u2713";
+      vTitle.textContent="接近硬短路 — 定位較可靠";
+      vDesc.textContent="V(P-E)+V(N-E) 已接近 Voc（"+sum.toFixed(1)+" / "+voc.toFixed(1)+" V），漏點電阻低、位置明確。"+dir;
+    }else if(vType==="soft"){
+      verdict.className="verdict warn";vIco.textContent="!";
+      var diff=(voc-sum);
+      vTitle.textContent="電阻型（軟性）漏點 — 擴大範圍";
+      vDesc.textContent="兩對地電壓相加比 Voc 少約 "+diff.toFixed(1)+" V（"+(sum/voc*100).toFixed(0)+"%），屬受潮/半進水型。m 精準度下降，已自動把檢查範圍放寬到 ±2 片。"+dir;
+    }else{
+      verdict.className="verdict warn";vIco.textContent="?";
+      vTitle.textContent="未輸入 Voc — 無法判定軟/硬性";
+      vDesc.textContent="建議補量整串開路電壓 Voc：若 V(P-E)+V(N-E)（目前 "+sum.toFixed(1)+" V）接近 Voc 代表硬短路、定位準；明顯偏低代表電阻型、需擴大檢查。"+dir;
+    }
+  }
+
+  // checklist 勾選
+  $("checklist").addEventListener("click",function(e){
+    var box=e.target.closest(".box");if(!box)return;
+    box.classList.toggle("on");
+    box.parentElement.classList.toggle("done");
+  });
+
+  // 事件
+  [vpeEl,vneEl,nEl,vocEl].forEach(function(el){el.addEventListener("input",calc);});
+  $("reset").addEventListener("click",function(){
+    vpeEl.value="";vneEl.value="";nEl.value="";vocEl.value="";
+    showEmpty();vpeEl.focus();
+  });
+
+  showEmpty();
+})();
+</script>
+</body>
+</html>
