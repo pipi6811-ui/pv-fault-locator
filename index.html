@@ -277,6 +277,123 @@
   }
   footer{text-align:center;font-size:11px;color:var(--ink-soft);
     font-family:var(--mono);margin-top:6px;letter-spacing:.04em;}
+
+  /* ---- 歸檔填寫區（螢幕） ---- */
+  .arch-hint{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin:0 0 12px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .field.sm{margin-bottom:0;}
+  .field.sm label{font-size:12px;margin-bottom:4px;display:block;font-weight:600;}
+  .field.sm input{
+    width:100%;font-family:var(--sans);font-size:15px;
+    padding:9px 10px;border:1.5px solid var(--line-strong);border-radius:8px;
+    background:#fff;color:var(--ink);
+  }
+  .field.sm input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,24,27,.1);}
+  .btn-print{
+    width:100%;margin-top:15px;background:var(--ink);color:var(--panel);
+    border:2px solid var(--ink);font-size:15px;
+  }
+  .btn-print:active{background:#000;}
+  .arch-grp{font-size:12px;font-weight:800;color:var(--ink);
+    border-left:3px solid var(--hazard);padding-left:8px;margin:18px 0 10px;letter-spacing:.02em;}
+  .arch-grp:first-of-type{margin-top:4px;}
+  .field.sm textarea{
+    width:100%;font-family:var(--sans);font-size:14px;line-height:1.5;
+    padding:9px 10px;border:1.5px solid var(--line-strong);border-radius:8px;
+    background:#fff;color:var(--ink);resize:vertical;
+  }
+  .field.sm textarea:focus,.field.sm select:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,24,27,.1);}
+  .field.sm select{
+    width:100%;font-family:var(--sans);font-size:15px;
+    padding:9px 10px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);
+  }
+  .formno-prev{font-family:var(--mono);font-size:12px;color:var(--ink-soft);
+    margin-top:10px;background:#F2F0EA;border-radius:7px;padding:8px 11px;}
+  .formno-prev span{color:var(--ink);font-weight:700;}
+  .ph-field{display:flex;flex-direction:column;gap:6px;}
+  .ph-field label{font-size:12px;font-weight:600;}
+  .ph-field input[type=file]{font-size:12px;color:var(--ink-soft);}
+  .ph-prev{display:none;width:100%;max-height:120px;object-fit:cover;
+    border:1.5px solid var(--line-strong);border-radius:8px;}
+  .ph-prev.on{display:block;}
+
+  /* ---- A4 列印文件：螢幕隱藏 ---- */
+  #printDoc{display:none;}
+
+  /* ====================== 列印樣式 ====================== */
+  @media print{
+    @page{size:A4;margin:12mm 12mm 10mm;}
+    html,body{background:#fff;margin:0;padding:0;}
+    .wrap{display:none !important;}
+    #printDoc{
+      display:block;color:#000;font-family:var(--sans);
+      font-size:10.5px;line-height:1.4;
+      -webkit-print-color-adjust:exact;print-color-adjust:exact;
+    }
+    #printDoc *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+
+    .pd-head{display:flex;justify-content:space-between;align-items:flex-end;
+      border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;}
+    .pd-co-cn{font-size:16px;font-weight:800;letter-spacing:.02em;}
+    .pd-co-en{font-size:9px;color:#444;letter-spacing:.03em;}
+    .pd-co-meta{font-size:9px;color:#444;text-align:right;line-height:1.4;}
+    .pd-title{font-size:15px;font-weight:800;text-align:center;margin:3px 0 1px;}
+    .pd-formno{font-size:9px;color:#444;text-align:right;margin-bottom:6px;}
+
+    .pd-sec{font-size:11px;font-weight:800;background:#222;color:#fff;
+      padding:3px 7px;margin:6px 0 0;border-radius:2px;}
+    .pd-tbl{width:100%;border-collapse:collapse;margin-top:0;}
+    .pd-tbl th,.pd-tbl td{border:0.8px solid #555;padding:3px 7px;text-align:left;
+      vertical-align:middle;font-size:10.5px;}
+    .pd-tbl th{background:#eee;font-weight:700;width:18%;white-space:nowrap;}
+    .pd-data td{font-family:var(--mono);font-weight:700;font-size:12px;}
+    .pd-blank{font-family:var(--sans) !important;font-weight:400 !important;color:#333;}
+    .pd-formula{font-family:var(--mono);font-size:10px;border:0.8px solid #999;
+      background:#f4f4f4;padding:3px 7px;margin-top:4px;}
+
+    /* 串列示意圖 */
+    .pd-string-ends{display:flex;justify-content:space-between;
+      font-family:var(--mono);font-size:9px;font-weight:700;margin:6px 0 3px;}
+    .pd-string{display:flex;flex-wrap:wrap;gap:2px;}
+    .pd-cell{flex:0 0 auto;min-width:17px;height:18px;border:0.8px solid #555;
+      display:grid;place-items:center;font-family:var(--mono);font-size:8px;
+      font-weight:700;background:#fff;}
+    .pd-cell.near{background:#F4E2A0;}
+    .pd-cell.hit{background:#F4C20D;border:1.4px solid #000;font-weight:800;}
+    .pd-legend{font-size:9px;margin-top:4px;display:flex;gap:12px;align-items:center;}
+    .pd-sw{display:inline-block;width:11px;height:11px;border:0.8px solid #000;
+      vertical-align:-1px;margin-right:3px;}
+    .pd-sw.pd-hit{background:#F4C20D;}
+    .pd-sw.pd-near{background:#F4E2A0;}
+    .pd-sw.pd-norm{background:#fff;}
+
+    .pd-check{list-style:none;margin:4px 0 0;padding:0;}
+    .pd-check li{display:flex;align-items:center;gap:7px;padding:2px 0;font-size:10.5px;}
+    .pd-box{flex:0 0 auto;width:13px;height:13px;border:1.2px solid #000;}
+
+    .pd-write{margin-top:4px;}
+    .pd-write>span{font-size:10.5px;font-weight:700;}
+    .pd-fill{min-height:26px;border:0.8px solid #999;border-radius:2px;margin-top:2px;
+      padding:3px 6px;font-size:10.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}
+    .pd-tip{font-size:9px;color:#555;margin-top:2px;}
+
+    .pd-photos{display:flex;gap:10px;margin-top:4px;break-inside:avoid;page-break-inside:avoid;}
+    .pd-photo{flex:1;break-inside:avoid;page-break-inside:avoid;}
+    .pd-photo-box{height:82px;border:1px dashed #777;border-radius:3px;background:#fafafa;
+      overflow:hidden;display:flex;align-items:center;justify-content:center;}
+    .pd-photo-box img{width:100%;height:100%;object-fit:cover;display:block;}
+    .pd-photo-cap{text-align:center;font-size:9px;font-weight:700;margin-top:2px;}
+
+    .pd-sign{break-inside:avoid;page-break-inside:avoid;}
+    .pd-sign th{width:18%;}
+    .pd-sign td{height:24px;}
+
+    .pd-foot{margin-top:6px;text-align:center;font-size:8px;color:#888;
+      border-top:0.8px solid #ccc;padding-top:3px;}
+
+    /* 避免區塊被切斷 */
+    .pd-sec,.pd-tbl,.pd-photos,.pd-check,.pd-string{page-break-inside:avoid;}
+  }
 </style>
 </head>
 <body>
@@ -422,9 +539,159 @@
         </div>
       </div>
     </section>
+
+    <!-- 5. 列印歸檔 -->
+    <section>
+      <div class="sec-head"><span class="num">5</span><h2>列印歸檔表（A4）</h2></div>
+      <div class="sec-body">
+        <p class="arch-hint">填入下列資訊後按列印，會自動帶入量測數據、示意圖、文字與照片，產生 A4 紀錄表。</p>
+
+        <div class="arch-grp">案場與作業</div>
+        <div class="grid2">
+          <div class="field sm"><label>案場名稱</label><input id="m_site" type="text" placeholder="例：台南○○案場"></div>
+          <div class="field sm"><label>案場編號</label><input id="m_siteid" type="text" placeholder="選填"></div>
+          <div class="field sm"><label>INV／匯流箱</label><input id="m_inv" type="text" placeholder="例：INV-3 / CB-2"></div>
+          <div class="field sm"><label>串列編號</label><input id="m_string" type="text" placeholder="例：S-12"></div>
+          <div class="field sm"><label>量測儀器</label><input id="m_inst" type="text" value="HIOKI IR4053-10 + DMM"></div>
+          <div class="field sm"><label>天氣／濕度</label><input id="m_wx" type="text" placeholder="例：雨後 濕度65%"></div>
+          <div class="field sm"><label>作業人員</label><input id="m_op" type="text" placeholder="姓名"></div>
+          <div class="field sm"><label>作業人員 2（協作）</label><input id="m_op2" type="text" placeholder="選填"></div>
+          <div class="field sm"><label>日期</label><input id="m_date" type="date"></div>
+          <div class="field sm"><label>流水號（每日自動 +1，可改）</label><input id="m_serial" type="text" inputmode="numeric" placeholder="001"></div>
+        </div>
+        <div class="formno-prev">表單編號：<span id="formnoPrev">—</span></div>
+
+        <div class="arch-grp">實際發現與處置</div>
+        <div class="field sm"><label>實際發現故障點</label><textarea id="m_found" rows="2" placeholder="例：第7片下方 MC4 公頭進水、端子氧化"></textarea></div>
+        <div class="field sm" style="margin-top:10px"><label>處置方式</label><textarea id="m_action" rows="2" placeholder="例：更換 MC4 公母頭、重新壓接、防水膠帶纏繞"></textarea></div>
+
+        <div class="arch-grp">修復後複量驗證</div>
+        <div class="grid2">
+          <div class="field sm"><label>V(P−E) 修復後</label><input id="r_vpe" type="number" inputmode="decimal" placeholder="V"></div>
+          <div class="field sm"><label>V(N−E) 修復後</label><input id="r_vne" type="number" inputmode="decimal" placeholder="V"></div>
+          <div class="field sm"><label>Riso 修復後</label><input id="r_riso" type="number" inputmode="decimal" placeholder="MΩ"></div>
+          <div class="field sm"><label>是否恢復正常</label>
+            <select id="r_ok"><option value="">—</option><option value="是">是</option><option value="否">否</option></select>
+          </div>
+        </div>
+
+        <div class="arch-grp">故障點照片（可拍照或選圖）</div>
+        <div class="grid2">
+          <div class="ph-field">
+            <label>修復前 BEFORE</label>
+            <input id="ph_before" type="file" accept="image/*">
+            <img id="ph_before_prev" class="ph-prev" alt="">
+          </div>
+          <div class="ph-field">
+            <label>修復後 AFTER</label>
+            <input id="ph_after" type="file" accept="image/*">
+            <img id="ph_after_prev" class="ph-prev" alt="">
+          </div>
+        </div>
+
+        <button class="btn-print" id="btnPrint" type="button">產生 A4 歸檔表並列印</button>
+      </div>
+    </section>
   </div>
 
-  <footer>m = |V(P&minus;E)| / (|V(P&minus;E)|+|V(N&minus;E)|) &times; n<br>v1.0 &middot; 更新 2026-06-24 &middot; 離線可用</footer>
+  <footer>m = |V(P&minus;E)| / (|V(P&minus;E)|+|V(N&minus;E)|) &times; n<br>v1.2 &middot; 更新 2026-06-24 &middot; 離線可用</footer>
+</div>
+
+<!-- ===================== 列印用 A4 文件（螢幕隱藏，列印時顯示） ===================== -->
+<div id="printDoc" aria-hidden="true">
+  <div class="pd-head">
+    <div class="pd-co">
+      <div class="pd-co-cn">暘勤能源科技有限公司</div>
+      <div class="pd-co-en">Yangchin Energy Technology Co., Ltd.</div>
+    </div>
+    <div class="pd-co-meta">電氣承裝業 Class&nbsp;A<br>太陽光電系統維運</div>
+  </div>
+  <div class="pd-title">太陽光電串列接地故障定位紀錄表</div>
+  <div class="pd-formno">表單編號：<span id="p_formno">—</span>　　頁次：1 / 1</div>
+
+  <!-- 一、案場與設備 -->
+  <div class="pd-sec">一、案場與設備</div>
+  <table class="pd-tbl">
+    <tr><th>案場名稱</th><td id="p_site" colspan="3"></td></tr>
+    <tr><th>案場編號</th><td id="p_siteid"></td><th>作業日期</th><td id="p_date"></td></tr>
+    <tr><th>INV／匯流箱</th><td id="p_inv"></td><th>串列編號</th><td id="p_string"></td></tr>
+    <tr><th>串列片數 n</th><td id="p_n"></td><th>天氣／濕度</th><td id="p_wx"></td></tr>
+    <tr><th>量測儀器</th><td id="p_inst" colspan="3"></td></tr>
+    <tr><th>作業人員</th><td id="p_op" colspan="3"></td></tr>
+  </table>
+
+  <!-- 二、量測數據 -->
+  <div class="pd-sec">二、量測數據</div>
+  <table class="pd-tbl pd-data">
+    <tr>
+      <th>V(P&minus;E) 正極對地</th><td id="p_vpe"></td>
+      <th>V(N&minus;E) 負極對地</th><td id="p_vne"></td>
+    </tr>
+    <tr>
+      <th>Voc 整串開路</th><td id="p_voc"></td>
+      <th>Riso 絕緣阻抗</th><td class="pd-blank">　　　　　 MΩ</td>
+    </tr>
+  </table>
+
+  <!-- 三、定位結果 -->
+  <div class="pd-sec">三、定位結果</div>
+  <table class="pd-tbl pd-data">
+    <tr>
+      <th>計算值 m</th><td id="p_m"></td>
+      <th>主攻片（從 PV+ 數）</th><td id="p_main"></td>
+    </tr>
+    <tr>
+      <th>建議檢查範圍</th><td id="p_zone"></td>
+      <th>故障類型判定</th><td id="p_type"></td>
+    </tr>
+  </table>
+  <div class="pd-formula" id="p_formula"></div>
+  <div class="pd-string-ends"><span>PV+ 第1片</span><span id="p_endN"></span></div>
+  <div class="pd-string" id="p_string_dia"></div>
+  <div class="pd-legend"><span class="pd-sw pd-hit"></span>主攻片　<span class="pd-sw pd-near"></span>連帶檢查　<span class="pd-sw pd-norm"></span>正常</div>
+
+  <!-- 四、現場檢查 -->
+  <div class="pd-sec">四、現場檢查（逐項打勾）</div>
+  <ul class="pd-check">
+    <li><span class="pd-box"></span>逐一拆開 MC4 接頭：積水／氧化／壓接不良／公母頭混接</li>
+    <li><span class="pd-box"></span>模組接線盒：龜裂／矽膠老化／進水痕跡</li>
+    <li><span class="pd-box"></span>電纜：磨破／動物咬損／UV 龜裂／被結構件夾壓</li>
+    <li><span class="pd-box"></span>受潮型：懷疑點灑水重現，觀察 Riso／對地電壓變化</li>
+  </ul>
+
+  <!-- 五、實際發現與處置 -->
+  <div class="pd-sec">五、實際發現故障點與處置方式</div>
+  <div class="pd-write"><span>實際發現：</span><div class="pd-fill" id="p_found"></div></div>
+  <div class="pd-write"><span>處置方式：</span><div class="pd-fill" id="p_action"></div></div>
+
+  <!-- 六、修復後複量 -->
+  <div class="pd-sec">六、修復後複量驗證</div>
+  <table class="pd-tbl pd-data">
+    <tr>
+      <th>V(P&minus;E)</th><td id="p_rvpe"></td>
+      <th>V(N&minus;E)</th><td id="p_rvne"></td>
+    </tr>
+    <tr>
+      <th>Riso</th><td id="p_rriso"></td>
+      <th>是否恢復正常</th><td id="p_rok"></td>
+    </tr>
+  </table>
+  <div class="pd-tip">提示：修復後 V(P-E)+V(N-E) 應回升至接近 Voc，且 Riso 回到正常區間。</div>
+
+  <!-- 七、故障點照片 -->
+  <div class="pd-sec">七、故障點照片</div>
+  <div class="pd-photos">
+    <div class="pd-photo"><div class="pd-photo-box" id="p_photo_before"></div><div class="pd-photo-cap">修復前 BEFORE</div></div>
+    <div class="pd-photo"><div class="pd-photo-box" id="p_photo_after"></div><div class="pd-photo-cap">修復後 AFTER</div></div>
+  </div>
+
+  <!-- 八、簽核 -->
+  <div class="pd-sec">八、簽核</div>
+  <table class="pd-tbl pd-sign">
+    <tr><th>作業人員</th><td></td><th>日期</th><td></td></tr>
+    <tr><th>主管覆核</th><td></td><th>日期</th><td></td></tr>
+  </table>
+  <div class="pd-foot">暘勤能源科技有限公司　ISO 故障定位紀錄表　v1.2</div>
 </div>
 
 <script>
@@ -435,10 +702,14 @@
   var roEmpty=$("roEmpty"),roResult=$("roResult"),afterResult=$("afterResult");
   var mMain=$("mMain"),mZone=$("mZone"),mRaw=$("mRaw"),stringEl=$("string"),endN=$("endN");
   var verdict=$("verdict"),vIco=$("vIco"),vTitle=$("vTitle"),vDesc=$("vDesc"),formulaLine=$("formulaLine");
+  var last=null;
+  function val(id){var e=$(id);return e&&e.value?e.value.trim():"";}
+  function setT(id,v){var e=$(id);if(e)e.textContent=v;}
 
   function num(el){var v=parseFloat(el.value);return isNaN(v)?null:v;}
   function clamp(x,lo,hi){return Math.max(lo,Math.min(hi,x));}
   function showEmpty(){
+    last=null;
     roEmpty.classList.remove("hidden");
     roResult.classList.add("hidden");
     afterResult.classList.add("hidden");
@@ -513,6 +784,16 @@
       vTitle.textContent="未輸入 Voc — 無法判定軟/硬性";
       vDesc.textContent="建議補量整串開路電壓 Voc：若 V(P-E)+V(N-E)（目前 "+sum.toFixed(1)+" V）接近 Voc 代表硬短路、定位準；明顯偏低代表電阻型、需擴大檢查。"+dir;
     }
+
+    var typeLabel = vType==="hard" ? "接近硬短路（定位較可靠）"
+                  : vType==="soft" ? "電阻型軟性漏點（建議查 ±2 片）"
+                  : "未輸入 Voc（無法判定軟/硬性）";
+    last={
+      vpeRaw:vpeEl.value, vneRaw:vneEl.value, vocRaw:vocEl.value,
+      n:n, mVal:m, main:main, lo:lo, hi:hi, sum:sum,
+      zone:(lo===hi?("第 "+main+" 片"):("第 "+lo+" ～ "+hi+" 片")),
+      typeLabel:typeLabel, formula:formulaLine.textContent
+    };
   }
 
   // checklist 勾選
@@ -528,6 +809,113 @@
     vpeEl.value="";vneEl.value="";nEl.value="";vocEl.value="";
     showEmpty();vpeEl.focus();
   });
+
+  // ---- 照片上傳（壓縮後存 dataURL）----
+  var photoBefore=null, photoAfter=null;
+  function loadPhoto(input,previewId,assign){
+    var f=input.files&&input.files[0];if(!f)return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        var max=1100,w=img.width,h=img.height;
+        if(w>max||h>max){var r=Math.min(max/w,max/h);w=Math.round(w*r);h=Math.round(h*r);}
+        var cv=document.createElement("canvas");cv.width=w;cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        var data=cv.toDataURL("image/jpeg",0.82);
+        assign(data);
+        var pv=$(previewId);pv.src=data;pv.classList.add("on");
+      };
+      img.src=reader.result;
+    };
+    reader.readAsDataURL(f);
+  }
+  $("ph_before").addEventListener("change",function(){loadPhoto(this,"ph_before_prev",function(d){photoBefore=d;});});
+  $("ph_after").addEventListener("change",function(){loadPhoto(this,"ph_after_prev",function(d){photoAfter=d;});});
+  function setPhoto(boxId,data){
+    var box=$(boxId);box.innerHTML="";
+    if(data){var im=document.createElement("img");im.src=data;box.appendChild(im);box.style.borderStyle="solid";}
+    else{box.style.borderStyle="dashed";}
+  }
+
+  // ---- 表單編號（日期 + 每日流水號，存本機）----
+  function pad3(n){return ("00"+n).slice(-3);}
+  function serialKey(){return "isoSerial_"+(val("m_date")||"x");}
+  function suggestSerial(){try{var v=localStorage.getItem(serialKey());return v?parseInt(v,10):1;}catch(e){return 1;}}
+  function formNo(){
+    var s=val("m_serial");s=pad3(parseInt(s,10)||suggestSerial());
+    return "ISO-FL-"+(val("m_date")||"").replace(/-/g,"")+"-"+s;
+  }
+  function bumpSerial(){
+    try{var used=parseInt(val("m_serial"),10)||suggestSerial();
+      localStorage.setItem(serialKey(),String(used+1));}catch(e){}
+  }
+  function updateFormnoPrev(){setT("formnoPrev",formNo());}
+
+  // ---- 列印 A4 歸檔表 ----
+  function buildPrint(){
+    if(!last){
+      alert("請先輸入 V(P-E)、V(N-E) 與片數 n，完成定位計算後再列印。");
+      return;
+    }
+    setT("p_site",val("m_site"));
+    setT("p_siteid",val("m_siteid"));
+    setT("p_inv",val("m_inv"));
+    setT("p_string",val("m_string"));
+    setT("p_inst",val("m_inst"));
+    setT("p_wx",val("m_wx"));
+    var ops=[val("m_op"),val("m_op2")].filter(function(x){return x;}).join("、");
+    setT("p_op",ops);
+    setT("p_date",val("m_date"));
+    setT("p_n",last.n+" 片");
+    setT("p_formno",formNo());
+    // 五、實際發現與處置
+    setT("p_found",val("m_found"));
+    setT("p_action",val("m_action"));
+    // 六、修復後複量
+    setT("p_rvpe",val("r_vpe")!==""?val("r_vpe")+" V":"");
+    setT("p_rvne",val("r_vne")!==""?val("r_vne")+" V":"");
+    setT("p_rriso",val("r_riso")!==""?val("r_riso")+" MΩ":"");
+    setT("p_rok",val("r_ok"));
+    // 七、照片
+    setPhoto("p_photo_before",photoBefore);
+    setPhoto("p_photo_after",photoAfter);
+    setT("p_vpe",last.vpeRaw!==""?last.vpeRaw+" V":"");
+    setT("p_vne",last.vneRaw!==""?last.vneRaw+" V":"");
+    setT("p_voc",last.vocRaw!==""?last.vocRaw+" V":"（未量）");
+    setT("p_m",last.mVal.toFixed(2));
+    setT("p_main","第 "+last.main+" 片");
+    setT("p_zone",last.zone);
+    setT("p_type",last.typeLabel);
+    setT("p_formula",last.formula);
+    setT("p_endN","第"+last.n+"片 PV\u2212");
+    var sd=$("p_string_dia");sd.innerHTML="";
+    for(var i=1;i<=last.n;i++){
+      var c=document.createElement("div");
+      c.className="pd-cell";
+      if(i===last.main)c.className+=" hit";
+      else if(i>=last.lo&&i<=last.hi)c.className+=" near";
+      c.textContent=i;
+      sd.appendChild(c);
+    }
+    bumpSerial();
+    updateFormnoPrev();
+    window.print();
+    // 列印後流水號帶下一筆
+    var se=$("m_serial");if(se)se.value=pad3(suggestSerial());
+    updateFormnoPrev();
+  }
+  $("btnPrint").addEventListener("click",buildPrint);
+
+  // 初始化：日期＝今天、流水號＝今日建議值、綁定編號預覽
+  (function(){
+    var d=new Date(),mm=("0"+(d.getMonth()+1)).slice(-2),dd=("0"+d.getDate()).slice(-2);
+    var de=$("m_date");if(de)de.value=d.getFullYear()+"-"+mm+"-"+dd;
+    var se=$("m_serial");if(se)se.value=pad3(suggestSerial());
+    updateFormnoPrev();
+    if(de)de.addEventListener("change",function(){se.value=pad3(suggestSerial());updateFormnoPrev();});
+    if(se)se.addEventListener("input",updateFormnoPrev);
+  })();
 
   showEmpty();
 })();
