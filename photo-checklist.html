@@ -1,888 +1,599 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>工作照片檢查清單 | PV 維運工具</title>
-  <meta name="description" content="太陽能維運現場工作照片檢查清單，AI 自動辨識標的物、自動填入檢查項目、照片自動帶浮水印。">
-  <meta name="theme-color" content="#14181B">
-  <link rel="manifest" href="manifest.webmanifest">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="工作照片清單">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>維運拍照 · 自動檢查項目</title>
+<meta name="description" content="太陽光電維運現場拍照工具：自動帶浮水印、自動推進檢查項目、可載入自訓 AI 模型辨識標的物。戴手套可單手操作。">
+<meta name="theme-color" content="#14181B">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="維運拍照">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<style>
+  :root{
+    --bg:#E7E4DC; --panel:#FBFAF7; --ink:#14181B; --ink-soft:#565B5F;
+    --line:#CFCBC1; --line-strong:#A9A498;
+    --green:#1E7A46; --green-bg:#E2F0E6;
+    --amber:#A8690A; --amber-bg:#F8ECCF;
+    --danger:#B23B30; --danger-bg:#F6E2DF;
+    --mono:"SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.55;
+    padding:0 0 env(safe-area-inset-bottom);-webkit-text-size-adjust:100%;}
+  .wrap{max-width:520px;margin:0 auto;padding:0 12px 40px;}
 
-  <style>
-    :root {
-      --bg: #E7E4DC;
-      --panel: #FBFAF7;
-      --ink: #14181B;
-      --ink-soft: #565B5F;
-      --line: #CFCBC1;
-      --line-strong: #A9A498;
-      --green: #1E7A46;
-      --green-bg: #E2F0E6;
-      --amber: #A8690A;
-      --amber-bg: #F8ECCF;
-      --danger: #B23B30;
-      --mono: "SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
-      --sans: system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
-    }
+  header{margin:12px 0 12px;border:2px solid var(--ink);background:var(--panel);
+    border-radius:10px;overflow:hidden;}
+  .plate{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 14px 10px;}
+  .plate h1{font-size:17px;font-weight:800;letter-spacing:-.02em;margin:0;}
+  .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;
+    color:var(--ink-soft);border:1px solid var(--line-strong);border-radius:4px;padding:2px 6px;white-space:nowrap;}
 
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      font-family: var(--sans);
-      background: var(--bg);
-      color: var(--ink);
-      line-height: 1.55;
-      padding: 0 0 env(safe-area-inset-bottom);
-    }
+  .tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .tab{flex:1;padding:12px 8px;border:2px solid var(--line-strong);background:var(--panel);
+    color:var(--ink);border-radius:9px;font-weight:700;font-size:13px;font-family:var(--sans);cursor:pointer;}
+  .tab.on{background:var(--ink);color:var(--panel);border-color:var(--ink);}
 
-    .wrap { max-width: 520px; margin: 0 auto; padding: 0 14px 48px; }
-    header {
-      margin: 14px 0 16px;
-      border: 2px solid var(--ink);
-      background: var(--panel);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .plate {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 13px 15px 11px;
-    }
-    .plate h1 { font-size: 18px; font-weight: 800; margin: 0; }
-    .tag {
-      font-family: var(--mono);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: .12em;
-      color: var(--ink-soft);
-      border: 1px solid var(--line-strong);
-      border-radius: 4px;
-      padding: 2px 6px;
-      white-space: nowrap;
-    }
+  section{background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
+    margin-bottom:12px;overflow:hidden;}
+  .sec-head{display:flex;align-items:center;gap:8px;padding:9px 13px;
+    border-bottom:1.5px solid var(--line);background:#F2F0EA;}
+  .sec-head .num{font-family:var(--mono);font-size:12px;font-weight:700;background:var(--ink);
+    color:var(--panel);width:20px;height:20px;border-radius:5px;display:grid;place-items:center;flex:0 0 auto;}
+  .sec-head h2{font-size:14px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .sec-body{padding:13px;}
 
-    /* 頁面切換 */
-    .nav-tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-    .nav-btn {
-      flex: 1;
-      padding: 11px 14px;
-      border: 2px solid var(--line-strong);
-      background: var(--panel);
-      color: var(--ink);
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 13px;
-      transition: all .2s;
-    }
-    .nav-btn.active {
-      background: var(--ink);
-      color: var(--panel);
-      border-color: var(--ink);
-    }
-    .nav-btn:active { opacity: 0.8; }
+  .page{display:none;} .page.on{display:block;}
+  .hidden{display:none!important;}
 
-    section {
-      background: var(--panel);
-      border: 1.5px solid var(--line);
-      border-radius: 10px;
-      margin-bottom: 14px;
-      overflow: hidden;
-    }
-    .sec-head {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 14px;
-      border-bottom: 1.5px solid var(--line);
-      background: #F2F0EA;
-    }
-    .sec-head .num {
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 700;
-      background: var(--ink);
-      color: var(--panel);
-      width: 20px;
-      height: 20px;
-      border-radius: 5px;
-      display: grid;
-      place-items: center;
-      flex: 0 0 auto;
-    }
-    .sec-head h2 { font-size: 14px; font-weight: 700; margin: 0; }
-    .sec-body { padding: 14px; }
+  /* ── 當前項目大字牌：戴手套 / 陽光下也看得清 ── */
+  .now{border:2px solid var(--ink);border-radius:12px;background:#F4C20D;padding:12px 14px;margin-bottom:10px;}
+  .now-k{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:#5a4a06;}
+  .now-v{font-size:30px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:2px;word-break:break-all;}
+  .now-meta{font-size:12.5px;font-weight:700;color:#5a4a06;margin-top:4px;}
+  .now.done{background:var(--green-bg);border-color:var(--green);}
+  .now.done .now-v{color:var(--green);}
+  .now.done .now-k,.now.done .now-meta{color:#2c5f42;}
 
-    .page { display: none; }
-    .page.active { display: block; }
+  .cam{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3;}
+  .cam video,.cam canvas{width:100%;height:100%;object-fit:cover;display:block;}
+  .cam-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+    color:#fff;font-size:13px;font-weight:600;padding:20px;background:#000;}
+  .ai-chip{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;
+    padding:5px 9px;border-radius:6px;font-size:12px;font-weight:700;}
 
-    /* 定位面板 */
-    .location-card {
-      background: #F2F0EA;
-      border: 1.5px solid var(--line);
-      border-radius: 8px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-    }
-    .loc-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-soft);
-      margin-bottom: 4px;
-    }
-    .loc-name {
-      font-size: 16px;
-      font-weight: 700;
-      color: var(--ink);
-      margin-bottom: 4px;
-    }
-    .loc-coord {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--ink-soft);
-    }
+  /* ── 快門：大、好按 ── */
+  .shutter{width:100%;margin-top:10px;padding:20px 16px;font-size:20px;font-weight:800;
+    font-family:var(--sans);border:2px solid var(--ink);border-radius:12px;
+    background:var(--ink);color:var(--panel);cursor:pointer;}
+  .shutter:active{background:#000;transform:scale(.99);}
+  .shutter:disabled{opacity:.45;}
 
-    /* 相機區 */
-    .camera-wrap {
-      position: relative;
-      background: #000;
-      border-radius: 10px;
-      overflow: hidden;
-      margin-bottom: 12px;
-      aspect-ratio: 4 / 3;
-    }
-    #cameraFeed {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .camera-hint {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.7);
-      color: #fff;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      pointer-events: none;
-    }
+  button{font-family:var(--sans);font-size:15px;font-weight:700;padding:12px 15px;
+    border-radius:9px;border:2px solid var(--ink);cursor:pointer;}
+  .btnrow{display:flex;gap:8px;margin-top:10px;}
+  .b1{flex:1;background:var(--ink);color:var(--panel);}
+  .b1:active{background:#000;}
+  .b2{flex:1;background:var(--panel);color:var(--ink);}
+  .b2:active{background:#EBE8E1;}
+  .b-sm{font-size:13px;padding:9px 12px;border-width:1.5px;border-color:var(--line-strong);
+    background:var(--panel);color:var(--ink);}
 
-    /* 按鈕組 */
-    .btnrow {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    button {
-      font-family: var(--sans);
-      font-size: 15px;
-      font-weight: 700;
-      padding: 13px 16px;
-      border-radius: 9px;
-      border: 2px solid var(--ink);
-      cursor: pointer;
-      transition: all .15s;
-    }
-    .btn-primary {
-      background: var(--ink);
-      color: var(--panel);
-      flex: 1;
-    }
-    .btn-primary:active { background: #000; }
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .btn-secondary {
-      background: var(--panel);
-      color: var(--ink);
-      flex: 1;
-    }
-    .btn-secondary:active { background: #EBE8E1; }
+  .steps{list-style:none;margin:10px 0 0;padding:0;}
+  .steps li{display:flex;align-items:center;gap:9px;padding:9px 2px;
+    border-bottom:1px solid var(--line);font-size:14px;}
+  .steps li:last-child{border-bottom:none;}
+  .dot{flex:0 0 auto;width:22px;height:22px;border:2px solid var(--line-strong);border-radius:6px;
+    background:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:11px;
+    font-weight:700;color:var(--ink-soft);}
+  .steps li.cur .dot{background:#F4C20D;border-color:var(--ink);color:var(--ink);}
+  .steps li.cur{font-weight:800;}
+  .steps li.ok .dot{background:var(--ink);border-color:var(--ink);color:#fff;}
+  .steps li.ok span.t{color:var(--ink-soft);}
+  .steps .jump{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink-soft);
+    border:1.5px solid var(--line-strong);border-radius:6px;padding:4px 9px;background:var(--panel);}
 
-    /* 識別結果 */
-    .result-box {
-      background: var(--green-bg);
-      border: 1.5px solid #9ccbac;
-      border-radius: 8px;
-      padding: 12px 14px;
-      margin-bottom: 12px;
-    }
-    .result-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--ink-soft);
-      margin-bottom: 4px;
-    }
-    .result-text {
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--green);
-    }
+  .field{margin-bottom:12px;} .field:last-child{margin-bottom:0;}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;}
+  .field input,.field textarea,.field select{width:100%;font-family:var(--sans);font-size:15px;
+    padding:10px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);}
+  .field textarea{resize:vertical;line-height:1.6;font-family:var(--mono);font-size:14px;}
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--ink);
+    box-shadow:0 0 0 3px rgba(20,24,27,.1);}
+  .hint{font-size:12px;color:var(--ink-soft);line-height:1.55;margin:6px 0 0;}
 
-    /* 檢查清單 */
-    .check {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-    }
-    .check li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 9px 2px;
-      border-bottom: 1px solid var(--line);
-      font-size: 13.5px;
-    }
-    .check li:last-child { border-bottom: none; }
-    .box {
-      flex: 0 0 auto;
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--line-strong);
-      border-radius: 4px;
-      margin-top: 1px;
-      background: #fff;
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      transition: all .15s;
-    }
-    .box.on {
-      background: var(--ink);
-      border-color: var(--ink);
-    }
-    .box.on::after {
-      content: "";
-      width: 5px;
-      height: 9px;
-      border: solid #fff;
-      border-width: 0 2.5px 2.5px 0;
-      transform: rotate(45deg) translate(-1px, -1px);
-    }
-    .check li.done span {
-      color: var(--ink-soft);
-      text-decoration: line-through;
-    }
+  .note{font-size:12.5px;color:var(--ink-soft);line-height:1.6;background:#F2F0EA;
+    border-radius:8px;padding:10px 12px;margin-top:10px;}
+  .note b{color:var(--ink);}
+  .note.warn{background:var(--amber-bg);color:#5c3d06;}
+  .note.warn b{color:#5c3d06;}
 
-    /* 浮水印預覽 */
-    .watermark-preview {
-      border: 1.5px solid var(--line);
-      border-radius: 8px;
-      overflow: hidden;
-      margin-bottom: 12px;
-      background: #000;
-      aspect-ratio: 4 / 3;
-    }
-    .watermark-preview img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
+  .shots{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .shot{border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;}
+  .shot img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover;}
+  .shot .cap{font-size:11.5px;font-weight:700;padding:6px 8px;border-top:1px solid var(--line);}
+  .shot .cap small{display:block;font-weight:400;color:var(--ink-soft);font-family:var(--mono);font-size:10px;}
 
-    /* 地點管理 */
-    .site-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .site-item {
-      background: #F2F0EA;
-      border: 1.5px solid var(--line);
-      border-radius: 8px;
-      padding: 12px 14px;
-      cursor: pointer;
-      transition: all .15s;
-    }
-    .site-item:active { background: #EBE8E1; }
-    .site-name {
-      font-weight: 700;
-      font-size: 14px;
-      margin-bottom: 3px;
-    }
-    .site-items {
-      font-size: 12px;
-      color: var(--ink-soft);
-    }
-
-    /* 設定表單 */
-    .field {
-      margin-bottom: 13px;
-    }
-    .field:last-child { margin-bottom: 0; }
-    .field label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    .field input,
-    .field textarea {
-      width: 100%;
-      font-family: var(--sans);
-      font-size: 15px;
-      padding: 9px 10px;
-      border: 1.5px solid var(--line-strong);
-      border-radius: 8px;
-      background: #fff;
-      color: var(--ink);
-    }
-    .field input:focus,
-    .field textarea:focus {
-      outline: none;
-      border-color: var(--ink);
-      box-shadow: 0 0 0 3px rgba(20,24,27,.1);
-    }
-    .field textarea { resize: vertical; line-height: 1.5; }
-
-    .status-text {
-      font-size: 12px;
-      color: var(--ink-soft);
-      margin-bottom: 8px;
-    }
-
-    footer {
-      text-align: center;
-      font-size: 11px;
-      color: var(--ink-soft);
-      font-family: var(--mono);
-      margin-top: 6px;
-      letter-spacing: .04em;
-    }
-
-    .loading {
-      text-align: center;
-      padding: 20px;
-      color: var(--ink-soft);
-      font-size: 13px;
-    }
-
-    .hidden { display: none !important; }
-  </style>
+  .empty{text-align:center;color:var(--ink-soft);padding:22px 10px;font-size:13px;}
+  footer{text-align:center;font-size:11px;color:var(--ink-soft);font-family:var(--mono);
+    margin-top:8px;letter-spacing:.04em;}
+</style>
 </head>
 <body>
 <div class="wrap">
+
   <header>
     <div class="plate">
-      <h1>工作照片檢查清單</h1>
-      <span class="tag">PHOTO·CHK</span>
+      <h1>維運拍照</h1>
+      <span class="tag">AUTO&middot;CHKLIST</span>
     </div>
   </header>
 
-  <!-- 頁面導航 -->
-  <div class="nav-tabs">
-    <button class="nav-btn active" data-page="camera">📷 拍照</button>
-    <button class="nav-btn" data-page="records">📋 記錄</button>
-    <button class="nav-btn" data-page="settings">⚙️ 設定</button>
+  <div class="tabs">
+    <button class="tab on" data-p="pShoot" type="button">拍照</button>
+    <button class="tab" data-p="pShots" type="button">本次照片</button>
+    <button class="tab" data-p="pSet" type="button">設定</button>
   </div>
 
-  <!-- 第 1 頁：拍照 + 檢查 -->
-  <div id="camera" class="page active">
-    <!-- 定位 -->
-    <section>
-      <div class="sec-head">
-        <span class="num">1</span>
-        <h2>當前位置</h2>
-      </div>
-      <div class="sec-body">
-        <div class="status-text" id="locStatus">定位中...</div>
-        <div class="location-card" id="locCard" style="display:none;">
-          <div class="loc-label">維運地點</div>
-          <div class="loc-name" id="locName">—</div>
-          <div class="loc-coord" id="locCoord">—</div>
-        </div>
-        <button class="btn-secondary" id="locRefresh">🔄 重新定位</button>
-      </div>
-    </section>
+  <!-- ══════════ 拍照 ══════════ -->
+  <div id="pShoot" class="page on">
 
-    <!-- 相機 -->
-    <section>
-      <div class="sec-head">
-        <span class="num">2</span>
-        <h2>拍照</h2>
-      </div>
-      <div class="sec-body">
-        <div class="camera-wrap">
-          <video id="cameraFeed" playsinline></video>
-          <div class="camera-hint" id="cameraHint">啟動相機中...</div>
-        </div>
+    <div class="now" id="nowCard">
+      <div class="now-k">現在要拍</div>
+      <div class="now-v" id="nowItem">—</div>
+      <div class="now-meta" id="nowMeta">—</div>
+    </div>
+
+    <div class="cam" id="camBox">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="cam-msg" id="camMsg">相機啟動中…</div>
+      <div class="ai-chip hidden" id="aiChip">AI 待命</div>
+    </div>
+
+    <button class="shutter" id="shutter" type="button" disabled>拍照</button>
+
+    <div class="btnrow">
+      <button class="b2 b-sm" id="btnPrev" type="button">← 上一項</button>
+      <button class="b2 b-sm" id="btnSkip" type="button">跳過 →</button>
+      <button class="b2 b-sm" id="btnFlip" type="button">切鏡頭</button>
+    </div>
+
+    <section style="margin-top:12px">
+      <div class="sec-head"><span class="num">☑</span><h2>檢查項目進度</h2></div>
+      <div class="sec-body" style="padding:6px 13px 13px">
+        <ul class="steps" id="steps"></ul>
         <div class="btnrow">
-          <button class="btn-primary" id="captureBtn">📸 拍照</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- AI 識別結果 -->
-    <section id="detectionSection" style="display:none;">
-      <div class="sec-head">
-        <span class="num">3</span>
-        <h2>標的物識別</h2>
-      </div>
-      <div class="sec-body">
-        <div id="detectionStatus">分析中...</div>
-        <div class="result-box" id="resultBox" style="display:none;">
-          <div class="result-label">識別結果</div>
-          <div class="result-text" id="resultText">—</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 照片預覽 + 浮水印 -->
-    <section id="photoSection" style="display:none;">
-      <div class="sec-head">
-        <span class="num">4</span>
-        <h2>照片浮水印預覽</h2>
-      </div>
-      <div class="sec-body">
-        <div class="watermark-preview">
-          <canvas id="watermarkCanvas"></canvas>
-        </div>
-        <div class="btnrow">
-          <button class="btn-secondary" id="retakeBtn">🔄 重新拍照</button>
-          <button class="btn-primary" id="savePhotoBtn">✓ 確認保存</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- 檢查清單 -->
-    <section id="checklistSection" style="display:none;">
-      <div class="sec-head">
-        <span class="num">5</span>
-        <h2>檢查項目</h2>
-      </div>
-      <div class="sec-body">
-        <ul class="check" id="checklistItems"></ul>
-        <div class="btnrow">
-          <button class="btn-primary" id="completeBtn">✓ 完成檢查</button>
+          <button class="b2 b-sm" id="btnReset" type="button">重設本次進度</button>
         </div>
       </div>
     </section>
   </div>
 
-  <!-- 第 2 頁：記錄列表 -->
-  <div id="records" class="page">
+  <!-- ══════════ 本次照片 ══════════ -->
+  <div id="pShots" class="page">
     <section>
-      <div class="sec-head">
-        <span class="num">1</span>
-        <h2>維運記錄</h2>
-      </div>
+      <div class="sec-head"><span class="num">▣</span><h2>本次拍攝</h2></div>
       <div class="sec-body">
-        <div id="recordsList" style="display:flex;flex-direction:column;gap:8px;"></div>
-        <div id="noRecords" style="text-align:center;color:var(--ink-soft);padding:20px;font-size:13px;">
-          還沒有記錄，先去拍照吧！
+        <div class="empty" id="shotsEmpty">還沒有照片。回「拍照」頁按快門。</div>
+        <div class="shots hidden" id="shotsGrid"></div>
+        <div class="note" id="shotsNote" style="display:none">
+          <b>存到手機：</b>長按照片 →「加入照片」／「下載圖片」。照片只放在這台手機的瀏覽器裡，清除瀏覽器資料會消失。
         </div>
-        <button class="btn-secondary" id="clearRecordsBtn" style="margin-top:12px;">🗑️ 清空所有記錄</button>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnClearShots" type="button">清空本次照片</button>
+        </div>
       </div>
     </section>
   </div>
 
-  <!-- 第 3 頁：設定 -->
-  <div id="settings" class="page">
+  <!-- ══════════ 設定 ══════════ -->
+  <div id="pSet" class="page">
     <section>
-      <div class="sec-head">
-        <span class="num">1</span>
-        <h2>地點管理</h2>
-      </div>
-      <div class="sec-body">
-        <div id="siteList" class="site-list"></div>
-        <button class="btn-secondary" id="addSiteBtn" style="margin-top:12px;">➕ 新增地點</button>
-      </div>
-    </section>
-
-    <section id="addSiteSection" style="display:none;">
-      <div class="sec-head">
-        <span class="num">2</span>
-        <h2>新增地點</h2>
-      </div>
+      <div class="sec-head"><span class="num">1</span><h2>浮水印內容</h2></div>
       <div class="sec-body">
         <div class="field">
-          <label>地點名稱</label>
-          <input id="siteName" type="text" placeholder="例：新光國小屋頂">
+          <label>維運區域</label>
+          <input id="sArea" type="text" placeholder="例：新光國小- 屋頂型">
         </div>
         <div class="field">
-          <label>檢查項目（每行一項）</label>
-          <textarea id="siteItems" rows="5" placeholder="例：太陽能板&#10;監控箱&#10;支架"></textarea>
+          <label>維運內容</label>
+          <input id="sWork" type="text" placeholder="例：Q3定檢">
+        </div>
+        <div class="field">
+          <label>檢查項目（一行一項，照拍攝順序排）</label>
+          <textarea id="sItems" rows="7" placeholder="太陽能板&#10;監控箱&#10;支架&#10;接線盒&#10;電纜"></textarea>
+          <p class="hint">拍完一張會自動跳到下一項，戴手套只要按快門。</p>
+        </div>
+        <button class="b1" id="btnSaveSet" type="button" style="width:100%">儲存設定</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">2</span><h2>AI 自動辨識（自訓模型）</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>Teachable Machine 模型網址</label>
+          <input id="sModel" type="url" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/">
+          <p class="hint">
+            留空＝只用順序自動推進（穩定、不必連網）。<br>
+            填入後：拍照時會辨識畫面中的標的物，<b>自動跳到對應的檢查項目</b>，順序拍錯也不會標錯。
+          </p>
         </div>
         <div class="btnrow">
-          <button class="btn-secondary" id="cancelAddSiteBtn">取消</button>
-          <button class="btn-primary" id="saveAddSiteBtn">保存</button>
+          <button class="b1" id="btnLoadModel" type="button">載入模型</button>
+          <button class="b2" id="btnUnloadModel" type="button">停用</button>
+        </div>
+        <div class="note" id="modelState"><b>狀態：</b>未載入（順序推進模式）</div>
+        <div class="note warn">
+          <b>模型的分類名稱要和上面的檢查項目文字一模一樣</b>，才對得起來。<br>
+          例如模型類別叫 <code>監控箱</code>，檢查項目那行也要寫 <code>監控箱</code>。
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">3</span><h2>怎麼訓練自己的模型</h2></div>
+      <div class="sec-body">
+        <div class="note">
+          <b>1.</b> 電腦開 <code>teachablemachine.withgoogle.com</code> → Get Started → <b>Image Project</b> → Standard image model<br><br>
+          <b>2.</b> 每個標的物開一個 Class，名稱打<b>中文</b>（監控箱、太陽能板…），把你檔案庫的照片拖進去。<br>
+          <span class="hint" style="margin:4px 0 0">每類至少 50 張，多角度、晴天陰天都要有，效果差很多。</span><br><br>
+          <b>3.</b> 按 <b>Train Model</b>（跑幾分鐘，別關分頁）<br><br>
+          <b>4.</b> <b>Export Model</b> → 選 <b>TensorFlow.js</b> → <b>Upload my model</b> → 複製它給的那串網址<br><br>
+          <b>5.</b> 貼到上面「模型網址」→ 按載入模型。
         </div>
       </div>
     </section>
   </div>
 
-  <footer>v1.0 · 工作現場照片檢查清單 · 離線可用</footer>
+  <footer>v2 &middot; 順序自動推進 + 自訓模型辨識</footer>
 </div>
 
-<!-- TensorFlow.js + COCO 模型 -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<canvas id="work" class="hidden"></canvas>
 
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
 <script>
-(async function() {
-  "use strict";
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
 
-  // ===== 工具函數 =====
-  const $ = (id) => document.getElementById(id);
-  const qs = (s) => document.querySelector(s);
+/* ═══════════ 設定 ═══════════ */
+var SET_KEY="pvchk_set_v2";
+var DEFAULT_SET={area:"",work:"",items:["太陽能板","監控箱","支架","接線盒","電纜"],model:""};
+var S=loadSet();
 
-  // ===== 數據管理 =====
-  class Storage {
-    static SITES_KEY = 'pv_sites';
-    static RECORDS_KEY = 'pv_records';
-
-    static getSites() {
-      try {
-        const data = localStorage.getItem(this.SITES_KEY);
-        return data ? JSON.parse(data) : getDefaultSites();
-      } catch (e) { return getDefaultSites(); }
-    }
-
-    static saveSites(sites) {
-      try { localStorage.setItem(this.SITES_KEY, JSON.stringify(sites)); } catch (e) {}
-    }
-
-    static getRecords() {
-      try {
-        const data = localStorage.getItem(this.RECORDS_KEY);
-        return data ? JSON.parse(data) : [];
-      } catch (e) { return []; }
-    }
-
-    static saveRecord(record) {
-      try {
-        const records = this.getRecords();
-        records.unshift({ ...record, id: Date.now(), timestamp: new Date().toISOString() });
-        localStorage.setItem(this.RECORDS_KEY, JSON.stringify(records));
-      } catch (e) {}
-    }
-
-    static deleteAllRecords() {
-      try { localStorage.removeItem(this.RECORDS_KEY); } catch (e) {}
-    }
-  }
-
-  function getDefaultSites() {
-    return [
-      {
-        id: 'site1',
-        name: '新光國小屋頂',
-        items: ['太陽能板', '監控箱', '支架', '接線盒', '電纜']
-      },
-      {
-        id: 'site2',
-        name: '社區停車場',
-        items: ['太陽能板', '逆變器', '配電箱', '監控', '接地線']
-      }
-    ];
-  }
-
-  // ===== GPS 定位 =====
-  let currentLocation = null;
-
-  async function getLocation() {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        $('locStatus').textContent = '❌ 你的瀏覽器不支援定位';
-        resolve(null);
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          currentLocation = { lat: latitude, lng: longitude };
-          updateLocationDisplay();
-          resolve(currentLocation);
-        },
-        (error) => {
-          $('locStatus').textContent = `❌ 定位失敗: ${error.message}`;
-          resolve(null);
-        },
-        { timeout: 10000, enableHighAccuracy: true }
-      );
-    });
-  }
-
-  function updateLocationDisplay() {
-    if (!currentLocation) return;
-
-    $('locStatus').style.display = 'none';
-    $('locCard').style.display = 'block';
-    $('locCoord').textContent = `${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}`;
-
-    // 根據 GPS 匹配最近的地點
-    const sites = Storage.getSites();
-    const nearest = sites[0]; // 簡化版，實際可計算距離
-    $('locName').textContent = nearest.name;
-  }
-
-  // ===== 相機控制 =====
-  let stream = null;
-  let currentPhotoBlob = null;
-
-  async function initCamera() {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false
-      });
-      $('cameraFeed').srcObject = stream;
-      $('cameraHint').textContent = '✓ 相機已啟動';
-      $('captureBtn').disabled = false;
-    } catch (err) {
-      $('cameraHint').textContent = `❌ ${err.message}`;
-      $('captureBtn').disabled = true;
-    }
-  }
-
-  function capturePhoto() {
-    const video = $('cameraFeed');
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      currentPhotoBlob = blob;
-      onPhotoCaptured(canvas);
-    }, 'image/jpeg', 0.9);
-  }
-
-  // ===== AI 識別 =====
-  let cocoModel = null;
-
-  async function loadModel() {
-    try {
-      cocoModel = await cocoSsd.load();
-    } catch (err) {
-      console.error('模型載入失敗:', err);
-    }
-  }
-
-  async function detectObjects(canvas) {
-    if (!cocoModel) return [];
-
-    try {
-      const predictions = await cocoModel.estimateObjects(canvas);
-      return predictions.map(p => p.class);
-    } catch (err) {
-      console.error('識別失敗:', err);
-      return [];
-    }
-  }
-
-  // ===== 浮水印 =====
-  function addWatermark(canvas) {
-    const ctx = canvas.getContext('2d');
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('zh-TW');
-    const timeStr = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
-    const siteStr = $('locName').textContent || '未定位';
-
-    // 底部黑條
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
-
-    // 文字
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(`📍 ${siteStr}`, 12, canvas.height - 38);
-    ctx.font = '12px monospace';
-    ctx.fillText(`${dateStr} ${timeStr}`, 12, canvas.height - 18);
-
-    return canvas;
-  }
-
-  function onPhotoCaptured(canvas) {
-    $('detectionSection').style.display = 'block';
-    $('photoSection').style.display = 'block';
-    $('checklistSection').style.display = 'block';
-
-    // 識別
-    detectObjects(canvas).then(objects => {
-      const detected = [...new Set(objects)].join('、') || '（未識別）';
-      $('resultText').textContent = detected;
-      $('resultBox').style.display = 'block';
-      $('detectionStatus').textContent = '✓ 識別完成';
-
-      // 浮水印預覽
-      const wmCanvas = $('watermarkCanvas');
-      wmCanvas.width = canvas.width;
-      wmCanvas.height = canvas.height;
-      wmCanvas.getContext('2d').drawImage(canvas, 0, 0);
-      addWatermark(wmCanvas);
-
-      // 更新檢查清單
-      updateChecklist(detected);
-    });
-  }
-
-  function updateChecklist(detected) {
-    const sites = Storage.getSites();
-    const siteItems = sites[0]?.items || [];
-
-    const checklistHtml = siteItems.map((item, idx) => `
-      <li>
-        <span class="box" data-idx="${idx}"></span>
-        <span>${item}</span>
-      </li>
-    `).join('');
-
-    $('checklistItems').innerHTML = checklistHtml;
-
-    // 綁定勾選事件
-    qs('#checklistItems').addEventListener('click', (e) => {
-      const box = e.target.closest('.box');
-      if (box) {
-        box.classList.toggle('on');
-        box.parentElement.classList.toggle('done');
-      }
-    });
-  }
-
-  // ===== 頁面切換 =====
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const page = btn.dataset.page;
-
-      // 更新按鈕
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-
-      // 切換頁面
-      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-      $(page).classList.add('active');
-
-      if (page === 'records') updateRecordsList();
-      if (page === 'settings') updateSitesList();
-    });
-  });
-
-  // ===== 記錄管理 =====
-  function updateRecordsList() {
-    const records = Storage.getRecords();
-    const list = $('recordsList');
-
-    if (records.length === 0) {
-      $('noRecords').style.display = 'block';
-      list.style.display = 'none';
-      return;
-    }
-
-    $('noRecords').style.display = 'none';
-    list.style.display = 'flex';
-    list.innerHTML = records.map(r => `
-      <div style="background:#F2F0EA;border:1.5px solid var(--line);border-radius:8px;padding:12px 14px;">
-        <div style="font-weight:700;margin-bottom:4px;">${r.location || '未定位'}</div>
-        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">
-          ${new Date(r.timestamp).toLocaleString('zh-TW')}
-        </div>
-        <div style="font-size:13px;">識別: ${r.detected}</div>
-      </div>
-    `).join('');
-  }
-
-  // ===== 地點管理 =====
-  function updateSitesList() {
-    const sites = Storage.getSites();
-    const list = $('siteList');
-    list.innerHTML = sites.map(site => `
-      <div class="site-item">
-        <div class="site-name">${site.name}</div>
-        <div class="site-items">${site.items.join(' · ')}</div>
-      </div>
-    `).join('');
-  }
-
-  $('addSiteBtn').addEventListener('click', () => {
-    $('addSiteSection').style.display = 'block';
-  });
-
-  $('cancelAddSiteBtn').addEventListener('click', () => {
-    $('addSiteSection').style.display = 'none';
-  });
-
-  $('saveAddSiteBtn').addEventListener('click', () => {
-    const name = $('siteName').value.trim();
-    const items = $('siteItems').value.trim().split('\n').filter(x => x);
-
-    if (!name || items.length === 0) {
-      alert('請填入地點名稱和檢查項目');
-      return;
-    }
-
-    const sites = Storage.getSites();
-    sites.push({ id: 'site_' + Date.now(), name, items });
-    Storage.saveSites(sites);
-
-    $('siteName').value = '';
-    $('siteItems').value = '';
-    $('addSiteSection').style.display = 'none';
-    updateSitesList();
-  });
-
-  // ===== 按鈕事件 =====
-  $('locRefresh').addEventListener('click', getLocation);
-
-  $('captureBtn').addEventListener('click', capturePhoto);
-
-  $('retakeBtn').addEventListener('click', () => {
-    $('detectionSection').style.display = 'none';
-    $('photoSection').style.display = 'none';
-    $('checklistSection').style.display = 'none';
-    currentPhotoBlob = null;
-  });
-
-  $('savePhotoBtn').addEventListener('click', () => {
-    const record = {
-      location: $('locName').textContent,
-      detected: $('resultText').textContent,
-      coords: currentLocation
+function loadSet(){
+  try{
+    var raw=localStorage.getItem(SET_KEY);
+    if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SET));
+    var o=JSON.parse(raw);
+    return {
+      area:o.area||"", work:o.work||"",
+      items:(o.items&&o.items.length)?o.items:DEFAULT_SET.items.slice(),
+      model:o.model||""
     };
-    Storage.saveRecord(record);
-    alert('✓ 照片已保存！');
+  }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_SET)); }
+}
+function saveSet(){ try{ localStorage.setItem(SET_KEY,JSON.stringify(S)); }catch(e){} }
 
-    // 重置
-    $('detectionSection').style.display = 'none';
-    $('photoSection').style.display = 'none';
-    $('checklistSection').style.display = 'none';
-    currentPhotoBlob = null;
+/* ═══════════ 進度 ═══════════ */
+var cur=0;                 // 目前項目 index
+var doneSet={};            // {itemName:true}
+var shots=[];              // {item,dataUrl,time}
+
+function itemName(i){ return S.items[i]||""; }
+function allDone(){ return S.items.length>0 && S.items.every(function(n){return doneSet[n];}); }
+
+function nextUndone(from){
+  var n=S.items.length; if(!n) return -1;
+  for(var k=0;k<n;k++){ var i=(from+k)%n; if(!doneSet[itemName(i)]) return i; }
+  return -1;
+}
+
+function renderNow(){
+  var card=$("nowCard");
+  if(allDone()){
+    card.classList.add("done");
+    $("nowItem").textContent="全部拍完 ✓";
+    $("nowMeta").textContent=S.items.length+" 項完成";
+    $("shutter").textContent="再拍一張（"+(itemName(cur)||"—")+"）";
+  }else{
+    card.classList.remove("done");
+    $("nowItem").textContent=itemName(cur)||"（尚未設定檢查項目）";
+    var d=S.items.filter(function(n){return doneSet[n];}).length;
+    $("nowMeta").textContent=(S.area||"未設定區域")+"　·　"+d+" / "+S.items.length+" 已拍";
+    $("shutter").textContent="拍照";
+  }
+}
+
+function renderSteps(){
+  var ul=$("steps"); ul.innerHTML="";
+  S.items.forEach(function(name,i){
+    var li=document.createElement("li");
+    if(doneSet[name]) li.className="ok";
+    if(i===cur&&!allDone()) li.className=(li.className?li.className+" ":"")+"cur";
+    var dot=document.createElement("span");
+    dot.className="dot"; dot.textContent=doneSet[name]?"✓":String(i+1);
+    var t=document.createElement("span"); t.className="t"; t.textContent=name;
+    var jump=document.createElement("button");
+    jump.className="jump"; jump.type="button"; jump.textContent="選這項";
+    jump.addEventListener("click",function(){ cur=i; renderNow(); renderSteps(); });
+    li.appendChild(dot); li.appendChild(t); li.appendChild(jump);
+    ul.appendChild(li);
   });
+}
 
-  $('completeBtn').addEventListener('click', () => {
-    alert('✓ 檢查完成！');
+/* ═══════════ 相機 ═══════════ */
+var stream=null, facing="environment", camReady=false;
+
+function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; } }
+
+function startCam(){
+  camReady=false; $("shutter").disabled=true;
+  stopCam();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari 開啟，且網址必須是 https。";
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:facing,width:{ideal:1920},height:{ideal:1440}},audio:false
+  }).then(function(st){
+    stream=st;
+    var v=$("video"); v.srcObject=st;
+    return v.play();
+  }).then(function(){
+    camReady=true; $("shutter").disabled=false;
+    $("camMsg").style.display="none";
+  }).catch(function(err){
+    var m=err&&err.name?err.name:"";
+    var msg="相機打不開："+(err&&err.message?err.message:m);
+    if(m==="NotAllowedError") msg="相機權限被拒。請在網址列旁的鎖頭圖示允許「相機」，再重新整理。";
+    if(m==="NotFoundError") msg="找不到相機裝置。";
+    $("camMsg").style.display="grid";
+    $("camMsg").textContent=msg;
   });
+}
 
-  $('clearRecordsBtn').addEventListener('click', () => {
-    if (confirm('確認要清空所有記錄嗎？')) {
-      Storage.deleteAllRecords();
-      updateRecordsList();
+/* ═══════════ 浮水印 ═══════════ */
+function stamp(cv,item){
+  var ctx=cv.getContext("2d");
+  var W=cv.width, H=cv.height;
+  var u=Math.max(W,H)/1000;                    // 縮放單位，讓浮水印在各解析度一致
+  var pad=22*u, lh=34*u, fs=25*u;
+  var rows=[
+    ["維運區域: ", S.area||"—"],
+    ["拍攝時間: ", fmtDate(new Date())],
+    ["維運內容: ", S.work||"—"],
+    ["檢查項目: ", item||"—"]
+  ];
+  ctx.font="700 "+fs+"px "+getComputedStyle(document.body).fontFamily;
+  var wMax=0;
+  rows.forEach(function(r){ wMax=Math.max(wMax,ctx.measureText(r[0]+r[1]).width); });
+
+  var titleH=42*u;
+  var boxW=Math.min(wMax+pad*2, W-24*u);
+  var boxH=titleH+lh*rows.length+pad*1.4;
+  var x=18*u, y=H-boxH-18*u;
+
+  ctx.fillStyle="rgba(255,255,255,.86)";
+  roundRect(ctx,x,y,boxW,boxH,10*u); ctx.fill();
+
+  ctx.fillStyle="rgba(31,94,168,.92)";
+  roundRect(ctx,x,y,boxW,titleH,10*u); ctx.fill();
+  ctx.fillStyle="#fff";
+  ctx.font="800 "+(24*u)+"px "+getComputedStyle(document.body).fontFamily;
+  ctx.textBaseline="middle";
+  ctx.fillText("維運記錄",x+pad,y+titleH/2);
+
+  ctx.textBaseline="alphabetic";
+  var ty=y+titleH+pad*0.55+fs;
+  rows.forEach(function(r){
+    ctx.font="700 "+fs+"px "+getComputedStyle(document.body).fontFamily;
+    ctx.fillStyle="#1f3a52"; ctx.fillText(r[0],x+pad,ty);
+    var kw=ctx.measureText(r[0]).width;
+    ctx.fillStyle="#14181B"; ctx.fillText(r[1],x+pad+kw,ty);
+    ty+=lh;
+  });
+  return cv;
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function fmtDate(d){
+  var p=function(n){return (n<10?"0":"")+n;};
+  return d.getFullYear()+"."+p(d.getMonth()+1)+"."+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+
+/* ═══════════ AI（Teachable Machine，自訓） ═══════════ */
+var model=null, modelLabels=[];
+
+function setModelState(html,warn){
+  var el=$("modelState");
+  el.className="note"+(warn?" warn":"");
+  el.innerHTML=html;
+}
+
+function loadModel(url){
+  url=(url||"").trim();
+  if(!url){ setModelState("<b>狀態：</b>未載入（順序推進模式）",false); return Promise.resolve(false); }
+  if(url.slice(-1)!=="/") url+="/";
+  if(typeof tmImage==="undefined"){
+    setModelState("<b>狀態：</b>載入失敗 — 辨識程式庫沒下載到（可能離線，或這個頁面擋掉了外部程式庫）。順序推進仍可正常使用。",true);
+    return Promise.resolve(false);
+  }
+  setModelState("<b>狀態：</b>載入中…",false);
+  return tmImage.load(url+"model.json",url+"metadata.json").then(function(m){
+    model=m;
+    modelLabels=(m.getClassLabels?m.getClassLabels():[])||[];
+    S.model=url; saveSet();
+    var known=modelLabels.filter(function(l){return S.items.indexOf(l)>=0;});
+    var msg="<b>狀態：</b>已載入 ✓ 類別："+modelLabels.join("、");
+    if(!known.length){
+      msg+="<br><b>注意：</b>模型類別和你的檢查項目對不起來，辨識結果會無法自動跳項。請把兩邊文字改成一致。";
+      setModelState(msg,true);
+    }else{
+      setModelState(msg,false);
     }
+    $("aiChip").classList.remove("hidden");
+    $("aiChip").textContent="AI 已就緒";
+    return true;
+  }).catch(function(err){
+    model=null;
+    setModelState("<b>狀態：</b>載入失敗 — "+(err&&err.message?err.message:err)+
+      "<br>檢查網址是否為 Teachable Machine「Upload my model」給的那串，且手機此刻能連網。順序推進仍可正常使用。",true);
+    $("aiChip").classList.add("hidden");
+    return false;
   });
+}
 
-  // ===== 初始化 =====
-  await Promise.all([
-    getLocation(),
-    initCamera(),
-    loadModel()
-  ]);
+function classify(cv){
+  if(!model) return Promise.resolve(null);
+  return model.predict(cv).then(function(preds){
+    if(!preds||!preds.length) return null;
+    preds.sort(function(a,b){return b.probability-a.probability;});
+    return {label:preds[0].className, p:preds[0].probability};
+  }).catch(function(){ return null; });
+}
 
-  updateSitesList();
+/* ═══════════ 拍照流程 ═══════════ */
+var busy=false;
+
+function shoot(){
+  if(!camReady||busy) return;
+  busy=true; $("shutter").disabled=true;
+
+  var v=$("video");
+  var cv=$("work");
+  cv.width=v.videoWidth||1280; cv.height=v.videoHeight||960;
+  cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
+
+  classify(cv).then(function(hit){
+    var item=itemName(cur);
+    if(hit&&hit.p>=0.7){
+      var idx=S.items.indexOf(hit.label);
+      if(idx>=0){ cur=idx; item=hit.label; }
+    }
+    if(hit){
+      $("aiChip").classList.remove("hidden");
+      $("aiChip").textContent="AI："+hit.label+" "+Math.round(hit.p*100)+"%";
+    }
+
+    stamp(cv,item);
+    var url=cv.toDataURL("image/jpeg",0.92);
+    shots.unshift({item:item,dataUrl:url,time:new Date().toISOString()});
+    doneSet[item]=true;
+    renderShots();
+
+    var nx=nextUndone(cur+1);
+    if(nx>=0) cur=nx;
+    renderNow(); renderSteps();
+  }).then(null,function(){}).then(function(){
+    busy=false; $("shutter").disabled=!camReady;
+  });
+}
+
+function renderShots(){
+  var g=$("shotsGrid");
+  if(!shots.length){
+    g.classList.add("hidden"); $("shotsEmpty").style.display="block";
+    $("shotsNote").style.display="none"; return;
+  }
+  g.classList.remove("hidden"); $("shotsEmpty").style.display="none";
+  $("shotsNote").style.display="block";
+  g.innerHTML="";
+  shots.forEach(function(s){
+    var d=document.createElement("div"); d.className="shot";
+    var im=document.createElement("img"); im.src=s.dataUrl; im.alt=s.item;
+    var cap=document.createElement("div"); cap.className="cap";
+    cap.textContent=s.item;
+    var sm=document.createElement("small"); sm.textContent=fmtDate(new Date(s.time));
+    cap.appendChild(sm);
+    d.appendChild(im); d.appendChild(cap); g.appendChild(d);
+  });
+}
+
+/* ═══════════ 設定頁 ═══════════ */
+function fillSetForm(){
+  $("sArea").value=S.area; $("sWork").value=S.work;
+  $("sItems").value=S.items.join("\n"); $("sModel").value=S.model;
+}
+$("btnSaveSet").addEventListener("click",function(){
+  var items=$("sItems").value.split("\n").map(function(x){return x.trim();}).filter(Boolean);
+  if(!items.length){ alert("至少要有一個檢查項目。"); return; }
+  S.area=$("sArea").value.trim();
+  S.work=$("sWork").value.trim();
+  S.items=items;
+  saveSet();
+  Object.keys(doneSet).forEach(function(k){ if(items.indexOf(k)<0) delete doneSet[k]; });
+  var nx=nextUndone(0); cur=nx>=0?nx:0;
+  renderNow(); renderSteps();
+  alert("已儲存。");
+});
+$("btnLoadModel").addEventListener("click",function(){ loadModel($("sModel").value); });
+$("btnUnloadModel").addEventListener("click",function(){
+  model=null; S.model=""; saveSet(); $("sModel").value="";
+  $("aiChip").classList.add("hidden");
+  setModelState("<b>狀態：</b>未載入（順序推進模式）",false);
+});
+
+/* ═══════════ 綁定 ═══════════ */
+$("shutter").addEventListener("click",shoot);
+$("btnPrev").addEventListener("click",function(){
+  if(!S.items.length) return;
+  cur=(cur-1+S.items.length)%S.items.length; renderNow(); renderSteps();
+});
+$("btnSkip").addEventListener("click",function(){
+  if(!S.items.length) return;
+  cur=(cur+1)%S.items.length; renderNow(); renderSteps();
+});
+$("btnFlip").addEventListener("click",function(){
+  facing=(facing==="environment")?"user":"environment"; startCam();
+});
+$("btnReset").addEventListener("click",function(){
+  if(!confirm("重設進度？（已拍的照片會保留）")) return;
+  doneSet={}; cur=0; renderNow(); renderSteps();
+});
+$("btnClearShots").addEventListener("click",function(){
+  if(!confirm("清空本次照片？沒存到相簿的會不見。")) return;
+  shots=[]; renderShots();
+});
+
+Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
+  t.addEventListener("click",function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
+    t.classList.add("on");
+    Array.prototype.forEach.call(document.querySelectorAll(".page"),function(p){p.classList.remove("on");});
+    $(t.dataset.p).classList.add("on");
+  });
+});
+
+/* ═══════════ 啟動 ═══════════ */
+fillSetForm();
+var nx0=nextUndone(0); cur=nx0>=0?nx0:0;
+renderNow(); renderSteps(); renderShots();
+startCam();
+if(S.model) loadModel(S.model);
+
+window.addEventListener("pagehide",stopCam);
+
+/* 供自動化測試用 */
+window.__pv={
+  stamp:stamp, get shots(){return shots;}, get set(){return S;},
+  get cur(){return cur;}, get done(){return doneSet;},
+  _shoot:shoot, _nextUndone:nextUndone
+};
 })();
 </script>
 </body>
