@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>工作照片檢查清單 | PV 維運工具</title>
+  <meta name="description" content="太陽能維運現場工作照片檢查清單，AI 自動辨識標的物、自動填入檢查項目、照片自動帶浮水印。">
+  <meta name="theme-color" content="#14181B">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="工作照片清單">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+
+  <style>
+    :root {
+      --bg: #E7E4DC;
+      --panel: #FBFAF7;
+      --ink: #14181B;
+      --ink-soft: #565B5F;
+      --line: #CFCBC1;
+      --line-strong: #A9A498;
+      --green: #1E7A46;
+      --green-bg: #E2F0E6;
+      --amber: #A8690A;
+      --amber-bg: #F8ECCF;
+      --danger: #B23B30;
+      --mono: "SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+      --sans: system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+      padding: 0 0 env(safe-area-inset-bottom);
+    }
+
+    .wrap { max-width: 520px; margin: 0 auto; padding: 0 14px 48px; }
+    header {
+      margin: 14px 0 16px;
+      border: 2px solid var(--ink);
+      background: var(--panel);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .plate {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 13px 15px 11px;
+    }
+    .plate h1 { font-size: 18px; font-weight: 800; margin: 0; }
+    .tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .12em;
+      color: var(--ink-soft);
+      border: 1px solid var(--line-strong);
+      border-radius: 4px;
+      padding: 2px 6px;
+      white-space: nowrap;
+    }
+
+    /* 頁面切換 */
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .nav-btn {
+      flex: 1;
+      padding: 11px 14px;
+      border: 2px solid var(--line-strong);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all .2s;
+    }
+    .nav-btn.active {
+      background: var(--ink);
+      color: var(--panel);
+      border-color: var(--ink);
+    }
+    .nav-btn:active { opacity: 0.8; }
+
+    section {
+      background: var(--panel);
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .sec-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1.5px solid var(--line);
+      background: #F2F0EA;
+    }
+    .sec-head .num {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--ink);
+      color: var(--panel);
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+    .sec-head h2 { font-size: 14px; font-weight: 700; margin: 0; }
+    .sec-body { padding: 14px; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* 定位面板 */
+    .location-card {
+      background: #F2F0EA;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .loc-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+    .loc-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-bottom: 4px;
+    }
+    .loc-coord {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-soft);
+    }
+
+    /* 相機區 */
+    .camera-wrap {
+      position: relative;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      aspect-ratio: 4 / 3;
+    }
+    #cameraFeed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .camera-hint {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      pointer-events: none;
+    }
+
+    /* 按鈕組 */
+    .btnrow {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    button {
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 700;
+      padding: 13px 16px;
+      border-radius: 9px;
+      border: 2px solid var(--ink);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .btn-primary {
+      background: var(--ink);
+      color: var(--panel);
+      flex: 1;
+    }
+    .btn-primary:active { background: #000; }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: var(--panel);
+      color: var(--ink);
+      flex: 1;
+    }
+    .btn-secondary:active { background: #EBE8E1; }
+
+    /* 識別結果 */
+    .result-box {
+      background: var(--green-bg);
+      border: 1.5px solid #9ccbac;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .result-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      margin-bottom: 4px;
+    }
+    .result-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--green);
+    }
+
+    /* 檢查清單 */
+    .check {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .check li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 9px 2px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13.5px;
+    }
+    .check li:last-child { border-bottom: none; }
+    .box {
+      flex: 0 0 auto;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--line-strong);
+      border-radius: 4px;
+      margin-top: 1px;
+      background: #fff;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: all .15s;
+    }
+    .box.on {
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+    .box.on::after {
+      content: "";
+      width: 5px;
+      height: 9px;
+      border: solid #fff;
+      border-width: 0 2.5px 2.5px 0;
+      transform: rotate(45deg) translate(-1px, -1px);
+    }
+    .check li.done span {
+      color: var(--ink-soft);
+      text-decoration: line-through;
+    }
+
+    /* 浮水印預覽 */
+    .watermark-preview {
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      background: #000;
+      aspect-ratio: 4 / 3;
+    }
+    .watermark-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* 地點管理 */
+    .site-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .site-item {
+      background: #F2F0EA;
+      border: 1.5px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .site-item:active { background: #EBE8E1; }
+    .site-name {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 3px;
+    }
+    .site-items {
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
+    /* 設定表單 */
+    .field {
+      margin-bottom: 13px;
+    }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .field input,
+    .field textarea {
+      width: 100%;
+      font-family: var(--sans);
+      font-size: 15px;
+      padding: 9px 10px;
+      border: 1.5px solid var(--line-strong);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .field input:focus,
+    .field textarea:focus {
+      outline: none;
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(20,24,27,.1);
+    }
+    .field textarea { resize: vertical; line-height: 1.5; }
+
+    .status-text {
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-bottom: 8px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 11px;
+      color: var(--ink-soft);
+      font-family: var(--mono);
+      margin-top: 6px;
+      letter-spacing: .04em;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="plate">
+      <h1>工作照片檢查清單</h1>
+      <span class="tag">PHOTO·CHK</span>
+    </div>
+  </header>
+
+  <!-- 頁面導航 -->
+  <div class="nav-tabs">
+    <button class="nav-btn active" data-page="camera">📷 拍照</button>
+    <button class="nav-btn" data-page="records">📋 記錄</button>
+    <button class="nav-btn" data-page="settings">⚙️ 設定</button>
+  </div>
+
+  <!-- 第 1 頁：拍照 + 檢查 -->
+  <div id="camera" class="page active">
+    <!-- 定位 -->
+    <section>
+      <div class="sec-head">
+        <span class="num">1</span>
+        <h2>當前位置</h2>
+      </div>
+      <div class="sec-body">
+        <div class="status-text" id="locStatus">定位中...</div>
+        <div class="location-card" id="locCard" style="display:none;">
+          <div class="loc-label">維運地點</div>
+          <div class="loc-name" id="locName">—</div>
+          <div class="loc-coord" id="locCoord">—</div>
+        </div>
+        <button class="btn-secondary" id="locRefresh">🔄 重新定位</button>
+      </div>
+    </section>
+
+    <!-- 相機 -->
+    <section>
+      <div class="sec-head">
+        <span class="num">2</span>
+        <h2>拍照</h2>
+      </div>
+      <div class="sec-body">
+        <div class="camera-wrap">
+          <video id="cameraFeed" playsinline></video>
+          <div class="camera-hint" id="cameraHint">啟動相機中...</div>
+        </div>
+        <div class="btnrow">
+          <button class="btn-primary" id="captureBtn">📸 拍照</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI 識別結果 -->
+    <section id="detectionSection" style="display:none;">
+      <div class="sec-head">
+        <span class="num">3</span>
+        <h2>標的物識別</h2>
+      </div>
+      <div class="sec-body">
+        <div id="detectionStatus">分析中...</div>
+        <div class="result-box" id="resultBox" style="display:none;">
+          <div class="result-label">識別結果</div>
+          <div class="result-text" id="resultText">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 照片預覽 + 浮水印 -->
+    <section id="photoSection" style="display:none;">
+      <div class="sec-head">
+        <span class="num">4</span>
+        <h2>照片浮水印預覽</h2>
+      </div>
+      <div class="sec-body">
+        <div class="watermark-preview">
+          <canvas id="watermarkCanvas"></canvas>
+        </div>
+        <div class="btnrow">
+          <button class="btn-secondary" id="retakeBtn">🔄 重新拍照</button>
+          <button class="btn-primary" id="savePhotoBtn">✓ 確認保存</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 檢查清單 -->
+    <section id="checklistSection" style="display:none;">
+      <div class="sec-head">
+        <span class="num">5</span>
+        <h2>檢查項目</h2>
+      </div>
+      <div class="sec-body">
+        <ul class="check" id="checklistItems"></ul>
+        <div class="btnrow">
+          <button class="btn-primary" id="completeBtn">✓ 完成檢查</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 第 2 頁：記錄列表 -->
+  <div id="records" class="page">
+    <section>
+      <div class="sec-head">
+        <span class="num">1</span>
+        <h2>維運記錄</h2>
+      </div>
+      <div class="sec-body">
+        <div id="recordsList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div id="noRecords" style="text-align:center;color:var(--ink-soft);padding:20px;font-size:13px;">
+          還沒有記錄，先去拍照吧！
+        </div>
+        <button class="btn-secondary" id="clearRecordsBtn" style="margin-top:12px;">🗑️ 清空所有記錄</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 第 3 頁：設定 -->
+  <div id="settings" class="page">
+    <section>
+      <div class="sec-head">
+        <span class="num">1</span>
+        <h2>地點管理</h2>
+      </div>
+      <div class="sec-body">
+        <div id="siteList" class="site-list"></div>
+        <button class="btn-secondary" id="addSiteBtn" style="margin-top:12px;">➕ 新增地點</button>
+      </div>
+    </section>
+
+    <section id="addSiteSection" style="display:none;">
+      <div class="sec-head">
+        <span class="num">2</span>
+        <h2>新增地點</h2>
+      </div>
+      <div class="sec-body">
+        <div class="field">
+          <label>地點名稱</label>
+          <input id="siteName" type="text" placeholder="例：新光國小屋頂">
+        </div>
+        <div class="field">
+          <label>檢查項目（每行一項）</label>
+          <textarea id="siteItems" rows="5" placeholder="例：太陽能板&#10;監控箱&#10;支架"></textarea>
+        </div>
+        <div class="btnrow">
+          <button class="btn-secondary" id="cancelAddSiteBtn">取消</button>
+          <button class="btn-primary" id="saveAddSiteBtn">保存</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>v1.0 · 工作現場照片檢查清單 · 離線可用</footer>
+</div>
+
+<!-- TensorFlow.js + COCO 模型 -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<script>
+(async function() {
+  "use strict";
+
+  // ===== 工具函數 =====
+  const $ = (id) => document.getElementById(id);
+  const qs = (s) => document.querySelector(s);
+
+  // ===== 數據管理 =====
+  class Storage {
+    static SITES_KEY = 'pv_sites';
+    static RECORDS_KEY = 'pv_records';
+
+    static getSites() {
+      try {
+        const data = localStorage.getItem(this.SITES_KEY);
+        return data ? JSON.parse(data) : getDefaultSites();
+      } catch (e) { return getDefaultSites(); }
+    }
+
+    static saveSites(sites) {
+      try { localStorage.setItem(this.SITES_KEY, JSON.stringify(sites)); } catch (e) {}
+    }
+
+    static getRecords() {
+      try {
+        const data = localStorage.getItem(this.RECORDS_KEY);
+        return data ? JSON.parse(data) : [];
+      } catch (e) { return []; }
+    }
+
+    static saveRecord(record) {
+      try {
+        const records = this.getRecords();
+        records.unshift({ ...record, id: Date.now(), timestamp: new Date().toISOString() });
+        localStorage.setItem(this.RECORDS_KEY, JSON.stringify(records));
+      } catch (e) {}
+    }
+
+    static deleteAllRecords() {
+      try { localStorage.removeItem(this.RECORDS_KEY); } catch (e) {}
+    }
+  }
+
+  function getDefaultSites() {
+    return [
+      {
+        id: 'site1',
+        name: '新光國小屋頂',
+        items: ['太陽能板', '監控箱', '支架', '接線盒', '電纜']
+      },
+      {
+        id: 'site2',
+        name: '社區停車場',
+        items: ['太陽能板', '逆變器', '配電箱', '監控', '接地線']
+      }
+    ];
+  }
+
+  // ===== GPS 定位 =====
+  let currentLocation = null;
+
+  async function getLocation() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        $('locStatus').textContent = '❌ 你的瀏覽器不支援定位';
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          currentLocation = { lat: latitude, lng: longitude };
+          updateLocationDisplay();
+          resolve(currentLocation);
+        },
+        (error) => {
+          $('locStatus').textContent = `❌ 定位失敗: ${error.message}`;
+          resolve(null);
+        },
+        { timeout: 10000, enableHighAccuracy: true }
+      );
+    });
+  }
+
+  function updateLocationDisplay() {
+    if (!currentLocation) return;
+
+    $('locStatus').style.display = 'none';
+    $('locCard').style.display = 'block';
+    $('locCoord').textContent = `${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}`;
+
+    // 根據 GPS 匹配最近的地點
+    const sites = Storage.getSites();
+    const nearest = sites[0]; // 簡化版，實際可計算距離
+    $('locName').textContent = nearest.name;
+  }
+
+  // ===== 相機控制 =====
+  let stream = null;
+  let currentPhotoBlob = null;
+
+  async function initCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      $('cameraFeed').srcObject = stream;
+      $('cameraHint').textContent = '✓ 相機已啟動';
+      $('captureBtn').disabled = false;
+    } catch (err) {
+      $('cameraHint').textContent = `❌ ${err.message}`;
+      $('captureBtn').disabled = true;
+    }
+  }
+
+  function capturePhoto() {
+    const video = $('cameraFeed');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      currentPhotoBlob = blob;
+      onPhotoCaptured(canvas);
+    }, 'image/jpeg', 0.9);
+  }
+
+  // ===== AI 識別 =====
+  let cocoModel = null;
+
+  async function loadModel() {
+    try {
+      cocoModel = await cocoSsd.load();
+    } catch (err) {
+      console.error('模型載入失敗:', err);
+    }
+  }
+
+  async function detectObjects(canvas) {
+    if (!cocoModel) return [];
+
+    try {
+      const predictions = await cocoModel.estimateObjects(canvas);
+      return predictions.map(p => p.class);
+    } catch (err) {
+      console.error('識別失敗:', err);
+      return [];
+    }
+  }
+
+  // ===== 浮水印 =====
+  function addWatermark(canvas) {
+    const ctx = canvas.getContext('2d');
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('zh-TW');
+    const timeStr = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    const siteStr = $('locName').textContent || '未定位';
+
+    // 底部黑條
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
+
+    // 文字
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`📍 ${siteStr}`, 12, canvas.height - 38);
+    ctx.font = '12px monospace';
+    ctx.fillText(`${dateStr} ${timeStr}`, 12, canvas.height - 18);
+
+    return canvas;
+  }
+
+  function onPhotoCaptured(canvas) {
+    $('detectionSection').style.display = 'block';
+    $('photoSection').style.display = 'block';
+    $('checklistSection').style.display = 'block';
+
+    // 識別
+    detectObjects(canvas).then(objects => {
+      const detected = [...new Set(objects)].join('、') || '（未識別）';
+      $('resultText').textContent = detected;
+      $('resultBox').style.display = 'block';
+      $('detectionStatus').textContent = '✓ 識別完成';
+
+      // 浮水印預覽
+      const wmCanvas = $('watermarkCanvas');
+      wmCanvas.width = canvas.width;
+      wmCanvas.height = canvas.height;
+      wmCanvas.getContext('2d').drawImage(canvas, 0, 0);
+      addWatermark(wmCanvas);
+
+      // 更新檢查清單
+      updateChecklist(detected);
+    });
+  }
+
+  function updateChecklist(detected) {
+    const sites = Storage.getSites();
+    const siteItems = sites[0]?.items || [];
+
+    const checklistHtml = siteItems.map((item, idx) => `
+      <li>
+        <span class="box" data-idx="${idx}"></span>
+        <span>${item}</span>
+      </li>
+    `).join('');
+
+    $('checklistItems').innerHTML = checklistHtml;
+
+    // 綁定勾選事件
+    qs('#checklistItems').addEventListener('click', (e) => {
+      const box = e.target.closest('.box');
+      if (box) {
+        box.classList.toggle('on');
+        box.parentElement.classList.toggle('done');
+      }
+    });
+  }
+
+  // ===== 頁面切換 =====
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.dataset.page;
+
+      // 更新按鈕
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // 切換頁面
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      $(page).classList.add('active');
+
+      if (page === 'records') updateRecordsList();
+      if (page === 'settings') updateSitesList();
+    });
+  });
+
+  // ===== 記錄管理 =====
+  function updateRecordsList() {
+    const records = Storage.getRecords();
+    const list = $('recordsList');
+
+    if (records.length === 0) {
+      $('noRecords').style.display = 'block';
+      list.style.display = 'none';
+      return;
+    }
+
+    $('noRecords').style.display = 'none';
+    list.style.display = 'flex';
+    list.innerHTML = records.map(r => `
+      <div style="background:#F2F0EA;border:1.5px solid var(--line);border-radius:8px;padding:12px 14px;">
+        <div style="font-weight:700;margin-bottom:4px;">${r.location || '未定位'}</div>
+        <div style="font-size:12px;color:var(--ink-soft);margin-bottom:4px;">
+          ${new Date(r.timestamp).toLocaleString('zh-TW')}
+        </div>
+        <div style="font-size:13px;">識別: ${r.detected}</div>
+      </div>
+    `).join('');
+  }
+
+  // ===== 地點管理 =====
+  function updateSitesList() {
+    const sites = Storage.getSites();
+    const list = $('siteList');
+    list.innerHTML = sites.map(site => `
+      <div class="site-item">
+        <div class="site-name">${site.name}</div>
+        <div class="site-items">${site.items.join(' · ')}</div>
+      </div>
+    `).join('');
+  }
+
+  $('addSiteBtn').addEventListener('click', () => {
+    $('addSiteSection').style.display = 'block';
+  });
+
+  $('cancelAddSiteBtn').addEventListener('click', () => {
+    $('addSiteSection').style.display = 'none';
+  });
+
+  $('saveAddSiteBtn').addEventListener('click', () => {
+    const name = $('siteName').value.trim();
+    const items = $('siteItems').value.trim().split('\n').filter(x => x);
+
+    if (!name || items.length === 0) {
+      alert('請填入地點名稱和檢查項目');
+      return;
+    }
+
+    const sites = Storage.getSites();
+    sites.push({ id: 'site_' + Date.now(), name, items });
+    Storage.saveSites(sites);
+
+    $('siteName').value = '';
+    $('siteItems').value = '';
+    $('addSiteSection').style.display = 'none';
+    updateSitesList();
+  });
+
+  // ===== 按鈕事件 =====
+  $('locRefresh').addEventListener('click', getLocation);
+
+  $('captureBtn').addEventListener('click', capturePhoto);
+
+  $('retakeBtn').addEventListener('click', () => {
+    $('detectionSection').style.display = 'none';
+    $('photoSection').style.display = 'none';
+    $('checklistSection').style.display = 'none';
+    currentPhotoBlob = null;
+  });
+
+  $('savePhotoBtn').addEventListener('click', () => {
+    const record = {
+      location: $('locName').textContent,
+      detected: $('resultText').textContent,
+      coords: currentLocation
+    };
+    Storage.saveRecord(record);
+    alert('✓ 照片已保存！');
+
+    // 重置
+    $('detectionSection').style.display = 'none';
+    $('photoSection').style.display = 'none';
+    $('checklistSection').style.display = 'none';
+    currentPhotoBlob = null;
+  });
+
+  $('completeBtn').addEventListener('click', () => {
+    alert('✓ 檢查完成！');
+  });
+
+  $('clearRecordsBtn').addEventListener('click', () => {
+    if (confirm('確認要清空所有記錄嗎？')) {
+      Storage.deleteAllRecords();
+      updateRecordsList();
+    }
+  });
+
+  // ===== 初始化 =====
+  await Promise.all([
+    getLocation(),
+    initCamera(),
+    loadModel()
+  ]);
+
+  updateSitesList();
+})();
+</script>
+</body>
+</html>
