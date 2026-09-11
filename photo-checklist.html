@@ -172,6 +172,7 @@
     #pShoot .items{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:5px;}
     #pShoot .item-btn{padding:9px 4px;font-size:13px;}
     #pShoot .btnrow{margin-top:6px;}
+    #pShoot #remoteHint{display:none;}
     #pShoot .btnrow .b-sm{padding:7px 8px;font-size:12px;}
   }
 
@@ -228,6 +229,10 @@
         <div class="btnrow">
           <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
+        <p class="hint" id="remoteHint">
+          藍牙快門遙控器可直接按下拍照（Enter／空白／上下鍵皆可）。
+          手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
+        </p>
       </div>
     </section>
   </div>
@@ -1042,7 +1047,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12a";
+var APP_VERSION="2026-09-12b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1108,6 +1113,21 @@ $("btnSwUpdate").addEventListener("click",function(){
 $("shutter").addEventListener("click",shoot);
 $("btnFlip").addEventListener("click",function(){
   facing=(facing==="environment")?"user":"environment"; startCam();
+});
+
+// 藍牙快門遙控器對手機而言是鍵盤，按鍵因廠牌而異，常見的都收。
+// 手機本身的音量鍵不會產生鍵盤事件，網頁無法攔截。
+var SHUTTER_KEYS={"Enter":1," ":1,"Spacebar":1,"ArrowUp":1,"ArrowDown":1,
+  "AudioVolumeUp":1,"AudioVolumeDown":1,"VolumeUp":1,"VolumeDown":1,"MediaPlayPause":1};
+document.addEventListener("keydown",function(e){
+  if(e.repeat||e.metaKey||e.ctrlKey||e.altKey) return;
+  if(!SHUTTER_KEYS[e.key]) return;
+  var t=e.target;
+  if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return;
+  if(t&&t.tagName==="BUTTON"&&t!==$("shutter")) return;   // 讓鍵盤仍能操作其他按鈕
+  if(!$("pShoot").classList.contains("on")) return;
+  e.preventDefault();
+  shoot();
 });
 window.addEventListener("pagehide",stopCam);
 
