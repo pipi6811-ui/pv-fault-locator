@@ -278,8 +278,11 @@
         </div>
         <div class="field">
           <label>上傳資料夾</label>
-          <input id="nPath" type="text" placeholder="/photo/維運記錄">
-          <p class="hint">要用 NAS 上的完整路徑，開頭是共用資料夾名稱。不存在的子資料夾會自動建立。</p>
+          <input id="nPath" type="text" placeholder="/暘勤/99 維運上傳照片">
+          <p class="hint">
+            <b>開頭要有斜線</b>，第一層是共用資料夾名稱，例如 <code>/暘勤/99 維運上傳照片</code>。
+            忘了加斜線會自動補上。不存在的子資料夾會自動建立。
+          </p>
         </div>
         <div class="field">
           <label class="chk">
@@ -715,6 +718,27 @@ function nasBase(){
   var h=(NAS.host||"").trim().replace(/\/+$/,"");
   return h||location.origin;
 }
+function nasPath(){
+  var p=(NAS.path||"").trim().replace(/\/+$/,"");
+  if(p&&p.charAt(0)!=="/") p="/"+p;
+  return p;
+}
+
+// 分辨「連不到 NAS」與「連得到但被 CORS 擋」：
+// no-cors 請求不受 CORS 阻擋，只有網路層真的不通時才會失敗。
+function diagnose(){
+  return fetch(nasBase()+"/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query",
+    {mode:"no-cors"}).then(function(){ return "cors"; })
+    .catch(function(){ return "unreachable"; });
+}
+function reachErr(kind){
+  if(kind==="cors")
+    return new Error("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。"+
+      "因為這個網頁不是從 NAS 本身提供的。解法：把頁面放到 NAS 的 Web Station，"+
+      "或在 DSM 反向代理加上 CORS 標頭");
+  return new Error("連不到 NAS。確認網址正確、NAS 在線上，"+
+    "以及這支手機目前的網路（行動網路或 Wi-Fi）連得到它");
+}
 function synoLogin(){
   var body=new URLSearchParams({
     api:"SYNO.API.Auth",version:"6",method:"login",
@@ -733,7 +757,7 @@ function synoLogin(){
     })
     .catch(function(err){
       if(err instanceof TypeError)
-        throw new Error("連不到 NAS。可能是網址錯誤、NAS 不在線上，或瀏覽器擋下跨網域請求（CORS）");
+        return diagnose().then(function(kind){ throw reachErr(kind); });
       throw err;
     });
 }
@@ -742,7 +766,7 @@ function synoUpload(sid,p){
   fd.append("api","SYNO.FileStation.Upload");
   fd.append("version","2");
   fd.append("method","upload");
-  fd.append("path",NAS.path||"");
+  fd.append("path",nasPath());
   fd.append("create_parents","true");
   fd.append("overwrite","true");
   fd.append("_sid",sid);
@@ -801,7 +825,7 @@ function uploadSelected(){
   }).then(function(){
     return refreshPhotos();
   }).then(function(){
-    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+NAS.path+"</code>","ok");
+    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+nasPath()+"</code>","ok");
     else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
   }).catch(function(err){
     setNote($("actState"),"<b>上傳中止：</b>"+errText(err),"bad");
