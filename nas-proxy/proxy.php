@@ -10,29 +10,58 @@
  * 它在 NAS 內部把請求轉給 DSM，再把結果原樣送回。
  *
  * 用法：proxy.php?_cgi=auth.cgi，其餘查詢參數原樣轉送。
+ * 端點不用 PATH_INFO：Web Station 的 nginx 只把結尾為 .php 的網址交給 PHP。
  * 對外只開放照片上傳所需的三個端點，其餘一律拒絕。
+ *
+ * 語法刻意維持在 PHP 7.0 可接受的範圍，避免 NAS 上的版本差異造成執行失敗。
  */
 
-declare(strict_types=1);
+// 轉發目標。若 DSM 的 HTTP 連接埠不是 5000，改這一行。
+define('DSM_BASE', 'http://localhost:5000');
 
-const DSM_BASE = 'http://localhost:5000';
-const ALLOWED  = ['auth.cgi', 'entry.cgi', 'query.cgi'];
-const MAX_BODY = 64 * 1024 * 1024;
+$ALLOWED = array('auth.cgi', 'entry.cgi', 'query.cgi');
 
-function refuse(int $code, string $why): never {
-    http_response_code($code);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success' => false, 'proxy_error' => $why], JSON_UNESCAPED_UNICODE);
+function refuse($code, $why) {
+    if (!headers_sent()) {
+        http_response_code($code);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(
+        array('success' => false, 'proxy_error' => $why),
+        JSON_UNESCAPED_UNICODE
+    );
     exit;
 }
 
-// 目標端點以查詢參數指定。不用 PATH_INFO，因為 Web Station 的 nginx
-// 只把結尾是 .php 的網址交給 PHP，proxy.php/webapi/... 會被當成找不到的檔案。
-$cgi = $_GET['_cgi'] ?? '';
+// 執行期出錯時回傳可讀訊息，而不是讓 Web Station 顯示一片 HTTP 500
+function fatal_as_json() {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR), true)) {
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo json_encode(
+            array('success' => false, 'proxy_error' => 'PHP 執行錯誤：' . $e['message'] .
+                '（' . basename($e['file']) . ' 第 ' . $e['line'] . ' 行）'),
+            JSON_UNESCAPED_UNICODE
+        );
+    }
+}
+register_shutdown_function('fatal_as_json');
+
+$hasCurl = function_exists('curl_init');
+$hasFopen = (bool) ini_get('allow_url_fopen');
+if (!$hasCurl && !$hasFopen) {
+    refuse(500, 'PHP 既沒有 curl 擴充功能，allow_url_fopen 也是關閉的，無法轉發。' .
+        '請到 Web Station 的 PHP 設定啟用 curl 擴充功能');
+}
+
+$cgi = isset($_GET['_cgi']) ? $_GET['_cgi'] : '';
 if ($cgi === '') {
     refuse(400, '缺少 _cgi 參數。正確用法：本檔案網址後面接 ?_cgi=auth.cgi');
 }
-if (!in_array($cgi, ALLOWED, true)) {
+if (!in_array($cgi, $ALLOWED, true)) {
     refuse(403, '這個端點未開放：' . $cgi);
 }
 
@@ -40,57 +69,117 @@ if (!in_array($cgi, ALLOWED, true)) {
 $query = $_GET;
 unset($query['_cgi']);
 $target = DSM_BASE . '/webapi/' . $cgi;
-if ($query !== []) {
+if (count($query) > 0) {
     $target .= '?' . http_build_query($query);
 }
 
-$ch = curl_init($target);
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HEADER         => false,
-    CURLOPT_CONNECTTIMEOUT => 10,
-    CURLOPT_TIMEOUT        => 600,
-    CURLOPT_FOLLOWLOCATION => false,
-]);
+$isPost = (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'POST');
 
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
-    // multipart（照片上傳）由 PHP 解析過，需依原欄位重建；
-    // 其餘（如登入的表單編碼）直接原樣轉送。
-    if (!empty($_FILES)) {
-        $fields = $_POST;
-        foreach ($_FILES as $name => $f) {
-            if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-                refuse(400, '檔案上傳失敗，錯誤碼 ' . $f['error'] .
-                    '（常見原因是 PHP 的上傳大小上限太小）');
+/* ---------- 組出要送給 DSM 的內容 ---------- */
+$postBody = null;      // 原始位元組
+$postType = null;      // 對應的 Content-Type
+$curlFields = null;    // curl 專用（可直接餵檔案）
+
+if ($isPost) {
+    if (count($_FILES) > 0) {
+        // 照片上傳。PHP 已把 multipart 拆解過，需依原欄位重新組裝。
+        foreach ($_FILES as $f) {
+            $err = isset($f['error']) ? $f['error'] : UPLOAD_ERR_NO_FILE;
+            if ($err !== UPLOAD_ERR_OK) {
+                $hint = ($err === UPLOAD_ERR_INI_SIZE || $err === UPLOAD_ERR_FORM_SIZE)
+                    ? '照片超過 PHP 的上傳大小上限，請在 Web Station 的 PHP 設定調高 upload_max_filesize 與 post_max_size'
+                    : '錯誤碼 ' . $err;
+                refuse(400, '檔案上傳失敗：' . $hint);
             }
-            $fields[$name] = new CURLFile(
-                $f['tmp_name'],
-                $f['type'] ?: 'application/octet-stream',
-                $f['name']
-            );
         }
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
+        if ($hasCurl) {
+            $curlFields = $_POST;
+            foreach ($_FILES as $name => $f) {
+                $type = $f['type'] !== '' ? $f['type'] : 'application/octet-stream';
+                $curlFields[$name] = class_exists('CURLFile')
+                    ? new CURLFile($f['tmp_name'], $type, $f['name'])
+                    : '@' . $f['tmp_name'] . ';type=' . $type . ';filename=' . $f['name'];
+            }
+        } else {
+            $boundary = '----pvshoot' . bin2hex(random_bytes(12));
+            $body = '';
+            foreach ($_POST as $k => $v) {
+                $body .= '--' . $boundary . "\r\n";
+                $body .= 'Content-Disposition: form-data; name="' . $k . '"' . "\r\n\r\n";
+                $body .= $v . "\r\n";
+            }
+            foreach ($_FILES as $name => $f) {
+                $type = $f['type'] !== '' ? $f['type'] : 'application/octet-stream';
+                $body .= '--' . $boundary . "\r\n";
+                $body .= 'Content-Disposition: form-data; name="' . $name .
+                         '"; filename="' . $f['name'] . '"' . "\r\n";
+                $body .= 'Content-Type: ' . $type . "\r\n\r\n";
+                $body .= file_get_contents($f['tmp_name']) . "\r\n";
+            }
+            $body .= '--' . $boundary . "--\r\n";
+            $postBody = $body;
+            $postType = 'multipart/form-data; boundary=' . $boundary;
+        }
     } else {
-        $body = file_get_contents('php://input');
-        if ($body === false) $body = '';
-        if (strlen($body) > MAX_BODY) refuse(413, '內容過大');
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        $ct = $_SERVER['CONTENT_TYPE'] ?? 'application/x-www-form-urlencoded';
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: ' . $ct]);
+        // 登入、登出等表單編碼的請求，原樣轉送
+        $raw = file_get_contents('php://input');
+        if ($raw === false) $raw = '';
+        if ($raw === '' && count($_POST) > 0) $raw = http_build_query($_POST);
+        $postBody = $raw;
+        $postType = isset($_SERVER['CONTENT_TYPE']) && $_SERVER['CONTENT_TYPE'] !== ''
+            ? $_SERVER['CONTENT_TYPE']
+            : 'application/x-www-form-urlencoded';
+        if ($hasCurl) $curlFields = $raw;
     }
 }
 
-$result = curl_exec($ch);
-if ($result === false) {
-    $err = curl_error($ch);
+/* ---------- 送出 ---------- */
+$result = false;
+$status = 200;
+$errText = '';
+
+if ($hasCurl) {
+    $ch = curl_init($target);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HEADER, false);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 600);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+    if ($isPost) {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $curlFields);
+        if (is_string($curlFields) && $postType !== null) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: ' . $postType));
+        }
+    }
+    $result = curl_exec($ch);
+    if ($result === false) $errText = curl_error($ch);
+    else $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
     curl_close($ch);
-    refuse(502, '轉發到 DSM 失敗：' . $err .
-        '（確認 DSM 的 HTTP 連接埠是 5000，若已改過請同步修改本檔案的 DSM_BASE）');
+} else {
+    $opts = array('http' => array(
+        'method'        => $isPost ? 'POST' : 'GET',
+        'timeout'       => 600,
+        'ignore_errors' => true,
+    ));
+    if ($isPost) {
+        $opts['http']['header']  = 'Content-Type: ' . $postType . "\r\n" .
+                                   'Content-Length: ' . strlen($postBody);
+        $opts['http']['content'] = $postBody;
+    }
+    $result = @file_get_contents($target, false, stream_context_create($opts));
+    if ($result === false) {
+        $errText = 'file_get_contents 無法連線';
+    } elseif (isset($http_response_header[0]) &&
+              preg_match('#\s(\d{3})\s#', $http_response_header[0], $m)) {
+        $status = (int) $m[1];
+    }
 }
-$status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-curl_close($ch);
+
+if ($result === false) {
+    refuse(502, '轉發到 DSM 失敗：' . $errText .
+        '（確認 DSM 的 HTTP 連接埠是 5000；若已改過，請修改本檔案開頭的 DSM_BASE）');
+}
 
 http_response_code($status);
 header('Content-Type: application/json; charset=utf-8');
