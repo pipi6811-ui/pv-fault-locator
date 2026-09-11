@@ -757,15 +757,28 @@ function esc(s){
 function htmlErr(msg){ var e=new Error(msg); e.html=true; return e; }
 function errHtml(e){ return (e&&e.html)?e.message:esc(errText(e)); }
 
+function sameOriginTarget(){
+  try{ return new URL(nasBase(),location.href).origin===location.origin; }
+  catch(e){ return false; }
+}
+
 function reachErr(kind){
-  if(kind==="cors")
-    return htmlErr("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。<br>"+
-      "這個頁面在 <code>"+esc(location.origin)+"</code>，"+
-      "NAS 網址卻設成 <code>"+esc(nasBase())+"</code>，兩者不同源（網域或連接埠不一樣）。<br>"+
-      "解法：改成這個頁面同網域下的轉發程式，通常是 "+
-      "<code>"+esc(location.origin)+"/pvapi/proxy.php</code>");
-  return htmlErr("連不到 NAS。確認網址正確、NAS 在線上，"+
-    "以及這支手機目前的網路（行動網路或 Wi-Fi）連得到它");
+  if(kind!=="cors")
+    return htmlErr("連不到 NAS。確認網址正確、NAS 在線上，"+
+      "以及這支手機目前的網路（行動網路或 Wi-Fi）連得到它");
+
+  // 同源不可能被跨來源政策擋下，報成 CORS 只會把人帶往錯誤方向
+  if(sameOriginTarget())
+    return htmlErr("連得到伺服器，但請求沒有完成。<br>"+
+      "位址和這個頁面同源，所以<b>不是</b>跨網域問題。<br>"+
+      "請直接在瀏覽器開啟 <code>"+esc(nasBase())+
+      "?_cgi=query.cgi&amp;api=SYNO.API.Info&amp;version=1&amp;method=query</code>，"+
+      "看它回什麼——通常會指出轉發程式或 PHP 服務的問題");
+
+  return htmlErr("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。<br>"+
+    "這個頁面在 <code>"+esc(location.origin)+"</code>，"+
+    "NAS 網址卻設成 <code>"+esc(nasBase())+"</code>，兩者不同源（網域或連接埠不一樣）。<br>"+
+    "解法：改用這個頁面同網域下的轉發程式，或改從 NAS 上的網址開啟這個頁面");
 }
 function synoLogin(){
   var body=new URLSearchParams({
@@ -997,7 +1010,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-11d";
+var APP_VERSION="2026-09-11e";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
