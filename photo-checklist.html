@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>維運拍照 · 自動檢查項目</title>
-<meta name="description" content="太陽光電維運現場拍照工具：自動帶浮水印、自動推進檢查項目、可載入自訓 AI 模型辨識標的物。戴手套可單手操作。">
+<title>維運拍照 · 檢查項目浮水印</title>
+<meta name="description" content="太陽光電維運現場拍照工具：點一下選檢查項目，拍照自動帶浮水印，可批次存相簿或上傳 Synology NAS。">
 <meta name="theme-color" content="#14181B">
 <link rel="manifest" href="manifest-shoot.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,6 +20,7 @@
     --green:#1E7A46; --green-bg:#E2F0E6;
     --amber:#A8690A; --amber-bg:#F8ECCF;
     --danger:#B23B30; --danger-bg:#F6E2DF;
+    --hazard:#F4C20D;
     --mono:"SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
     --sans:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
   }
@@ -27,9 +28,9 @@
   html,body{margin:0;padding:0;}
   body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.55;
     padding:0 0 env(safe-area-inset-bottom);-webkit-text-size-adjust:100%;}
-  .wrap{max-width:520px;margin:0 auto;padding:0 12px 40px;}
+  .wrap{max-width:540px;margin:0 auto;padding:0 12px 40px;}
 
-  header{margin:12px 0 12px;border:2px solid var(--ink);background:var(--panel);
+  header{margin:12px 0;border:2px solid var(--ink);background:var(--panel);
     border-radius:10px;overflow:hidden;}
   .plate{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 14px 10px;}
   .plate h1{font-size:17px;font-weight:800;letter-spacing:-.02em;margin:0;}
@@ -37,9 +38,10 @@
     color:var(--ink-soft);border:1px solid var(--line-strong);border-radius:4px;padding:2px 6px;white-space:nowrap;}
 
   .tabs{display:flex;gap:6px;margin-bottom:12px;}
-  .tab{flex:1;padding:12px 8px;border:2px solid var(--line-strong);background:var(--panel);
+  .tab{flex:1;padding:12px 6px;border:2px solid var(--line-strong);background:var(--panel);
     color:var(--ink);border-radius:9px;font-weight:700;font-size:13px;font-family:var(--sans);cursor:pointer;}
   .tab.on{background:var(--ink);color:var(--panel);border-color:var(--ink);}
+  .tab .badge{font-family:var(--mono);font-size:11px;opacity:.75;}
 
   section{background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
     margin-bottom:12px;overflow:hidden;}
@@ -53,75 +55,99 @@
   .page{display:none;} .page.on{display:block;}
   .hidden{display:none!important;}
 
-  /* ── 當前項目大字牌：戴手套 / 陽光下也看得清 ── */
-  .now{border:2px solid var(--ink);border-radius:12px;background:#F4C20D;padding:12px 14px;margin-bottom:10px;}
+  .now{border:2px solid var(--ink);border-radius:12px;background:var(--hazard);
+    padding:10px 14px;margin-bottom:10px;}
   .now-k{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:#5a4a06;}
-  .now-v{font-size:30px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:2px;word-break:break-all;}
-  .now-meta{font-size:12.5px;font-weight:700;color:#5a4a06;margin-top:4px;}
-  .now.done{background:var(--green-bg);border-color:var(--green);}
-  .now.done .now-v{color:var(--green);}
-  .now.done .now-k,.now.done .now-meta{color:#2c5f42;}
+  .now-v{font-size:28px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:1px;word-break:break-all;}
+  .now-meta{font-size:12.5px;font-weight:700;color:#5a4a06;margin-top:3px;}
 
   .cam{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3;}
-  .cam video,.cam canvas{width:100%;height:100%;object-fit:cover;display:block;}
+  .cam video{width:100%;height:100%;object-fit:cover;display:block;}
   .cam-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
     color:#fff;font-size:13px;font-weight:600;padding:20px;background:#000;}
   .ai-chip{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;
     padding:5px 9px;border-radius:6px;font-size:12px;font-weight:700;}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;}
+  .flash.go{animation:fl .32s ease-out;}
+  @keyframes fl{from{opacity:.85;}to{opacity:0;}}
+  @media (prefers-reduced-motion:reduce){.flash.go{animation:none;}}
 
-  /* ── 快門：大、好按 ── */
   .shutter{width:100%;margin-top:10px;padding:20px 16px;font-size:20px;font-weight:800;
     font-family:var(--sans);border:2px solid var(--ink);border-radius:12px;
     background:var(--ink);color:var(--panel);cursor:pointer;}
   .shutter:active{background:#000;transform:scale(.99);}
   .shutter:disabled{opacity:.45;}
 
+  /* 項目按鈕：常駐，點一下切換，不自動跳 */
+  .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:7px;}
+  .item-btn{position:relative;padding:14px 8px;border:2px solid var(--line-strong);
+    background:var(--panel);color:var(--ink);border-radius:10px;font-family:var(--sans);
+    font-size:15px;font-weight:700;cursor:pointer;text-align:center;line-height:1.25;}
+  .item-btn.on{background:var(--hazard);border-color:var(--ink);}
+  .item-btn .n{position:absolute;top:3px;right:5px;font-family:var(--mono);font-size:11px;
+    font-weight:700;color:var(--ink-soft);}
+  .item-btn.on .n{color:#5a4a06;}
+
   button{font-family:var(--sans);font-size:15px;font-weight:700;padding:12px 15px;
     border-radius:9px;border:2px solid var(--ink);cursor:pointer;}
-  .btnrow{display:flex;gap:8px;margin-top:10px;}
-  .b1{flex:1;background:var(--ink);color:var(--panel);}
+  .btnrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .b1{flex:1;min-width:120px;background:var(--ink);color:var(--panel);}
   .b1:active{background:#000;}
-  .b2{flex:1;background:var(--panel);color:var(--ink);}
+  .b1:disabled{opacity:.45;}
+  .b2{flex:1;min-width:120px;background:var(--panel);color:var(--ink);}
   .b2:active{background:#EBE8E1;}
+  .b2:disabled{opacity:.45;}
   .b-sm{font-size:13px;padding:9px 12px;border-width:1.5px;border-color:var(--line-strong);
     background:var(--panel);color:var(--ink);}
+  .b-danger{color:var(--danger);border-color:#dba59e;background:var(--danger-bg);}
 
-  .steps{list-style:none;margin:10px 0 0;padding:0;}
-  .steps li{display:flex;align-items:center;gap:9px;padding:9px 2px;
-    border-bottom:1px solid var(--line);font-size:14px;}
-  .steps li:last-child{border-bottom:none;}
-  .dot{flex:0 0 auto;width:22px;height:22px;border:2px solid var(--line-strong);border-radius:6px;
-    background:#fff;display:grid;place-items:center;font-family:var(--mono);font-size:11px;
-    font-weight:700;color:var(--ink-soft);}
-  .steps li.cur .dot{background:#F4C20D;border-color:var(--ink);color:var(--ink);}
-  .steps li.cur{font-weight:800;}
-  .steps li.ok .dot{background:var(--ink);border-color:var(--ink);color:#fff;}
-  .steps li.ok span.t{color:var(--ink-soft);}
-  .steps .jump{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink-soft);
-    border:1.5px solid var(--line-strong);border-radius:6px;padding:4px 9px;background:var(--panel);}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;}
+  .thumb{position:relative;border:2px solid var(--line);border-radius:9px;overflow:hidden;
+    background:#fff;cursor:pointer;}
+  .thumb.sel{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,24,27,.16);}
+  .thumb img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover;}
+  .thumb .cap{font-size:11.5px;font-weight:700;padding:5px 7px;border-top:1px solid var(--line);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .thumb .cap small{display:block;font-weight:400;color:var(--ink-soft);
+    font-family:var(--mono);font-size:10px;}
+  .thumb .mark{position:absolute;top:5px;left:5px;width:21px;height:21px;border-radius:6px;
+    border:2px solid var(--ink);background:#fff;display:grid;place-items:center;
+    font-size:13px;font-weight:800;line-height:1;}
+  .thumb.sel .mark{background:var(--ink);color:#fff;}
+  .thumb .up{position:absolute;top:5px;right:5px;background:var(--green);color:#fff;
+    font-size:10px;font-weight:800;padding:2px 5px;border-radius:5px;}
 
   .field{margin-bottom:12px;} .field:last-child{margin-bottom:0;}
   .field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;}
-  .field input,.field textarea,.field select{width:100%;font-family:var(--sans);font-size:15px;
+  .field input,.field textarea{width:100%;font-family:var(--sans);font-size:15px;
     padding:10px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);}
   .field textarea{resize:vertical;line-height:1.6;font-family:var(--mono);font-size:14px;}
-  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--ink);
+  .field input:focus,.field textarea:focus{outline:none;border-color:var(--ink);
     box-shadow:0 0 0 3px rgba(20,24,27,.1);}
   .hint{font-size:12px;color:var(--ink-soft);line-height:1.55;margin:6px 0 0;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;}
+  .chk input{width:20px;height:20px;flex:0 0 auto;}
 
   .note{font-size:12.5px;color:var(--ink-soft);line-height:1.6;background:#F2F0EA;
     border-radius:8px;padding:10px 12px;margin-top:10px;}
   .note b{color:var(--ink);}
-  .note.warn{background:var(--amber-bg);color:#5c3d06;}
-  .note.warn b{color:#5c3d06;}
+  .note.warn{background:var(--amber-bg);color:#5c3d06;} .note.warn b{color:#5c3d06;}
+  .note.ok{background:var(--green-bg);color:#245c3d;} .note.ok b{color:#245c3d;}
+  .note.bad{background:var(--danger-bg);color:#7a2a22;} .note.bad b{color:#7a2a22;}
+  .note code{font-family:var(--mono);font-size:11.5px;background:rgba(20,24,27,.07);
+    padding:1px 4px;border-radius:3px;}
 
-  .shots{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .shot{border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;}
-  .shot img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover;}
-  .shot .cap{font-size:11.5px;font-weight:700;padding:6px 8px;border-top:1px solid var(--line);}
-  .shot .cap small{display:block;font-weight:400;color:var(--ink-soft);font-family:var(--mono);font-size:10px;}
+  .bar{height:9px;border-radius:5px;background:#E3E0D8;border:1px solid var(--line-strong);
+    overflow:hidden;margin-top:6px;}
+  .bar i{display:block;height:100%;background:var(--ink);width:0;}
+  .bar i.warn{background:var(--amber);}
 
   .empty{text-align:center;color:var(--ink-soft);padding:22px 10px;font-size:13px;}
+  .selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-size:13px;font-weight:700;margin-bottom:10px;}
+  .selbar .sp{margin-left:auto;font-family:var(--mono);font-size:12px;
+    font-weight:600;color:var(--ink-soft);}
   footer{text-align:center;font-size:11px;color:var(--ink-soft);font-family:var(--mono);
     margin-top:8px;letter-spacing:.04em;}
 </style>
@@ -132,62 +158,78 @@
   <header>
     <div class="plate">
       <h1>維運拍照</h1>
-      <span class="tag">AUTO&middot;CHKLIST</span>
+      <span class="tag">PHOTO&middot;STAMP</span>
     </div>
   </header>
 
   <div class="tabs">
     <button class="tab on" data-p="pShoot" type="button">拍照</button>
-    <button class="tab" data-p="pShots" type="button">本次照片</button>
+    <button class="tab" data-p="pShots" type="button">照片 <span class="badge" id="tabCount">0</span></button>
     <button class="tab" data-p="pSet" type="button">設定</button>
   </div>
 
   <!-- ══════════ 拍照 ══════════ -->
   <div id="pShoot" class="page on">
 
-    <div class="now" id="nowCard">
-      <div class="now-k">現在要拍</div>
+    <div class="now">
+      <div class="now-k">浮水印的檢查項目</div>
       <div class="now-v" id="nowItem">—</div>
       <div class="now-meta" id="nowMeta">—</div>
     </div>
 
     <div class="cam" id="camBox">
       <video id="video" playsinline muted autoplay></video>
+      <div class="flash" id="flash"></div>
       <div class="cam-msg" id="camMsg">相機啟動中…</div>
       <div class="ai-chip hidden" id="aiChip">AI 待命</div>
     </div>
 
     <button class="shutter" id="shutter" type="button" disabled>拍照</button>
 
-    <div class="btnrow">
-      <button class="b2 b-sm" id="btnPrev" type="button">← 上一項</button>
-      <button class="b2 b-sm" id="btnSkip" type="button">跳過 →</button>
-      <button class="b2 b-sm" id="btnFlip" type="button">切鏡頭</button>
-    </div>
-
     <section style="margin-top:12px">
-      <div class="sec-head"><span class="num">☑</span><h2>檢查項目進度</h2></div>
-      <div class="sec-body" style="padding:6px 13px 13px">
-        <ul class="steps" id="steps"></ul>
+      <div class="sec-head">
+        <span class="num">◉</span>
+        <h2>換標的物就點一下</h2>
+      </div>
+      <div class="sec-body">
+        <div class="items" id="itemBtns"></div>
         <div class="btnrow">
-          <button class="b2 b-sm" id="btnReset" type="button">重設本次進度</button>
+          <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
       </div>
     </section>
   </div>
 
-  <!-- ══════════ 本次照片 ══════════ -->
+  <!-- ══════════ 照片 ══════════ -->
   <div id="pShots" class="page">
     <section>
-      <div class="sec-head"><span class="num">▣</span><h2>本次拍攝</h2></div>
+      <div class="sec-head"><span class="num">▣</span><h2>照片</h2></div>
       <div class="sec-body">
-        <div class="empty" id="shotsEmpty">還沒有照片。回「拍照」頁按快門。</div>
-        <div class="shots hidden" id="shotsGrid"></div>
-        <div class="note" id="shotsNote" style="display:none">
-          <b>存到手機：</b>長按照片 →「加入照片」／「下載圖片」。照片只放在這台手機的瀏覽器裡，清除瀏覽器資料會消失。
+        <div class="selbar" id="selBar">
+          <button class="b-sm" id="btnSelAll" type="button">全選</button>
+          <button class="b-sm" id="btnSelNone" type="button">取消選取</button>
+          <button class="b-sm" id="btnSelNotUp" type="button">選未上傳</button>
+          <span class="sp" id="selInfo">已選 0</span>
+        </div>
+        <div class="empty" id="shotsEmpty">還沒有照片。</div>
+        <div class="grid hidden" id="shotsGrid"></div>
+      </div>
+    </section>
+
+    <section id="actSec" class="hidden">
+      <div class="sec-head"><span class="num">↥</span><h2>處理選取的照片</h2></div>
+      <div class="sec-body">
+        <div class="btnrow">
+          <button class="b1" id="btnUpload" type="button">上傳到 NAS</button>
+          <button class="b2" id="btnShare" type="button">存到相簿</button>
         </div>
         <div class="btnrow">
-          <button class="b2 b-sm" id="btnClearShots" type="button">清空本次照片</button>
+          <button class="b2 b-sm b-danger" id="btnDel" type="button">刪除選取的照片</button>
+        </div>
+        <div class="note hidden" id="actState"></div>
+        <div class="note">
+          <b>存到相簿：</b>會跳出手機的分享面板，選「儲存影像」。iPhone 一次分享太多張容易失敗，建議每次選 10 張以內。<br>
+          <b>上傳 NAS：</b>需要先在設定頁填好 NAS 資訊。上傳成功的照片會標上綠色 <b>✓</b>，不會重複上傳。
         </div>
       </div>
     </section>
@@ -195,6 +237,7 @@
 
   <!-- ══════════ 設定 ══════════ -->
   <div id="pSet" class="page">
+
     <section>
       <div class="sec-head"><span class="num">1</span><h2>浮水印內容</h2></div>
       <div class="sec-body">
@@ -207,53 +250,105 @@
           <input id="sWork" type="text" placeholder="例：Q3定檢">
         </div>
         <div class="field">
-          <label>檢查項目（一行一項，照拍攝順序排）</label>
+          <label>檢查項目（一行一項）</label>
           <textarea id="sItems" rows="7" placeholder="太陽能板&#10;監控箱&#10;支架&#10;接線盒&#10;電纜"></textarea>
-          <p class="hint">拍完一張會自動跳到下一項，戴手套只要按快門。</p>
+          <p class="hint">這些會變成拍照頁的按鈕。看到什麼就點哪一個，不限順序。</p>
         </div>
-        <button class="b1" id="btnSaveSet" type="button" style="width:100%">儲存設定</button>
+        <button class="b1" id="btnSaveSet" type="button" style="width:100%">儲存</button>
       </div>
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">2</span><h2>AI 自動辨識（自訓模型）</h2></div>
+      <div class="sec-head"><span class="num">2</span><h2>Synology NAS 上傳</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>NAS 網址</label>
+          <input id="nHost" type="url" placeholder="https://你的NAS:5001">
+          <p class="hint">
+            留空＝用目前這個網頁的網域（把這個頁面放在 NAS 的 Web Station 時就留空，最省事）。
+          </p>
+        </div>
+        <div class="row2">
+          <div class="field"><label>帳號</label><input id="nUser" type="text" autocomplete="username"></div>
+          <div class="field"><label>密碼</label><input id="nPass" type="password" autocomplete="current-password"></div>
+        </div>
+        <div class="field">
+          <label>二階段驗證碼（沒開就留空）</label>
+          <input id="nOtp" type="text" inputmode="numeric" placeholder="6 位數字">
+        </div>
+        <div class="field">
+          <label>上傳資料夾</label>
+          <input id="nPath" type="text" placeholder="/photo/維運記錄">
+          <p class="hint">要用 NAS 上的完整路徑，開頭是共用資料夾名稱。不存在的子資料夾會自動建立。</p>
+        </div>
+        <div class="field">
+          <label class="chk">
+            <input id="nRemember" type="checkbox">
+            <span>記住密碼</span>
+          </label>
+          <p class="hint">
+            密碼會以明文存在這支手機的瀏覽器裡。手機借人或遺失就等於密碼外流。
+            建議在 NAS 上另開一個只有這個資料夾寫入權限的帳號給這支 App 用。
+          </p>
+        </div>
+        <div class="btnrow">
+          <button class="b1" id="btnNasSave" type="button">儲存</button>
+          <button class="b2" id="btnNasTest" type="button">測試連線</button>
+        </div>
+        <div class="note hidden" id="nasState"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">3</span><h2>AI 自動選項目（自訓模型）</h2></div>
       <div class="sec-body">
         <div class="field">
           <label>Teachable Machine 模型網址</label>
           <input id="sModel" type="url" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/">
           <p class="hint">
-            留空＝只用順序自動推進（穩定、不必連網）。<br>
-            填入後：拍照時會辨識畫面中的標的物，<b>自動跳到對應的檢查項目</b>，順序拍錯也不會標錯。
+            留空＝手動點按鈕選項目。<br>
+            填入後：拍照瞬間辨識畫面，自動把浮水印換成辨識到的項目，連點都不用點。
           </p>
         </div>
         <div class="btnrow">
           <button class="b1" id="btnLoadModel" type="button">載入模型</button>
           <button class="b2" id="btnUnloadModel" type="button">停用</button>
         </div>
-        <div class="note" id="modelState"><b>狀態：</b>未載入（順序推進模式）</div>
+        <div class="note" id="modelState"><b>狀態：</b>未載入（手動選項目）</div>
         <div class="note warn">
-          <b>模型的分類名稱要和上面的檢查項目文字一模一樣</b>，才對得起來。<br>
-          例如模型類別叫 <code>監控箱</code>，檢查項目那行也要寫 <code>監控箱</code>。
+          <b>模型的分類名稱要和上面的檢查項目文字一模一樣</b>，才對得起來。
         </div>
       </div>
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>怎麼訓練自己的模型</h2></div>
+      <div class="sec-head"><span class="num">4</span><h2>儲存空間</h2></div>
+      <div class="sec-body">
+        <div id="quotaText" style="font-size:13px;font-weight:600">計算中…</div>
+        <div class="bar"><i id="quotaBar"></i></div>
+        <div class="note" id="persistNote"></div>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnRefreshQuota" type="button">重新計算</button>
+          <button class="b2 b-sm b-danger" id="btnWipe" type="button">刪除全部照片</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">5</span><h2>怎麼訓練自己的模型</h2></div>
       <div class="sec-body">
         <div class="note">
           <b>1.</b> 電腦開 <code>teachablemachine.withgoogle.com</code> → Get Started → <b>Image Project</b> → Standard image model<br><br>
-          <b>2.</b> 每個標的物開一個 Class，名稱打<b>中文</b>（監控箱、太陽能板…），把你檔案庫的照片拖進去。<br>
-          <span class="hint" style="margin:4px 0 0">每類至少 50 張，多角度、晴天陰天都要有，效果差很多。</span><br><br>
-          <b>3.</b> 按 <b>Train Model</b>（跑幾分鐘，別關分頁）<br><br>
-          <b>4.</b> <b>Export Model</b> → 選 <b>TensorFlow.js</b> → <b>Upload my model</b> → 複製它給的那串網址<br><br>
-          <b>5.</b> 貼到上面「模型網址」→ 按載入模型。
+          <b>2.</b> 每個標的物開一個 Class，名稱打<b>中文</b>，和檢查項目文字一致，把檔案庫的照片拖進去。<br>
+          <span class="hint" style="margin:4px 0 0">每類至少 50 張，多角度、晴天陰天都要有。</span><br><br>
+          <b>3.</b> 按 <b>Train Model</b>，跑完後 <b>Export Model</b> → <b>TensorFlow.js</b> → <b>Upload my model</b> → 複製網址<br><br>
+          <b>4.</b> 貼到上面 → 載入模型。
         </div>
       </div>
     </section>
   </div>
 
-  <footer>v2 &middot; 順序自動推進 + 自訓模型辨識</footer>
+  <footer>v3 &middot; 不限順序 &middot; 可批次上傳 NAS</footer>
 </div>
 
 <canvas id="work" class="hidden"></canvas>
@@ -266,144 +361,146 @@
 var $=function(id){return document.getElementById(id);};
 
 /* ═══════════ 設定 ═══════════ */
-var SET_KEY="pvchk_set_v2";
+var SET_KEY="pvshoot_set";
+var NAS_KEY="pvshoot_nas";
 var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   items:["太陽能板","監控箱","支架","接線盒","電纜"],model:""};
-var S=loadSet();
 
-function loadSet(){
+var S=readJSON(SET_KEY,DEFAULT_SET);
+var NAS=readJSON(NAS_KEY,{host:"",user:"",pass:"",path:"",remember:false});
+
+function readJSON(k,dflt){
   try{
-    var raw=localStorage.getItem(SET_KEY);
-    if(!raw) return JSON.parse(JSON.stringify(DEFAULT_SET));
-    var o=JSON.parse(raw);
-    return {
-      area:o.area||"", work:o.work||"",
-      items:(o.items&&o.items.length)?o.items:DEFAULT_SET.items.slice(),
-      model:o.model||""
+    var raw=localStorage.getItem(k);
+    if(!raw) return JSON.parse(JSON.stringify(dflt));
+    var o=JSON.parse(raw), out=JSON.parse(JSON.stringify(dflt));
+    Object.keys(out).forEach(function(key){ if(o[key]!==undefined) out[key]=o[key]; });
+    if(out.items&&!out.items.length) out.items=dflt.items.slice();
+    return out;
+  }catch(e){ return JSON.parse(JSON.stringify(dflt)); }
+}
+function writeJSON(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+/* ═══════════ IndexedDB ═══════════ */
+var DB=null;
+function dbOpen(){
+  return new Promise(function(res,rej){
+    if(DB) return res(DB);
+    var rq=indexedDB.open("pvshoot",1);
+    rq.onupgradeneeded=function(){
+      var db=rq.result;
+      if(!db.objectStoreNames.contains("photos"))
+        db.createObjectStore("photos",{keyPath:"id",autoIncrement:true});
     };
-  }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_SET)); }
+    rq.onsuccess=function(){ DB=rq.result; res(DB); };
+    rq.onerror=function(){ rej(rq.error); };
+  });
 }
-function saveSet(){ try{ localStorage.setItem(SET_KEY,JSON.stringify(S)); }catch(e){} }
-
-/* ═══════════ 進度 ═══════════ */
-var cur=0;                 // 目前項目 index
-var doneSet={};            // {itemName:true}
-var shots=[];              // {item,dataUrl,time}
-
-function itemName(i){ return S.items[i]||""; }
-function allDone(){ return S.items.length>0 && S.items.every(function(n){return doneSet[n];}); }
-
-function nextUndone(from){
-  var n=S.items.length; if(!n) return -1;
-  for(var k=0;k<n;k++){ var i=(from+k)%n; if(!doneSet[itemName(i)]) return i; }
-  return -1;
+function tx(mode){
+  return dbOpen().then(function(db){ return db.transaction("photos",mode).objectStore("photos"); });
+}
+function dbAdd(rec){
+  return tx("readwrite").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.add(rec);
+      r.onsuccess=function(){ res(r.result); };
+      r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbAll(){
+  return tx("readonly").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.getAll();
+      r.onsuccess=function(){ res((r.result||[]).sort(function(a,b){return b.id-a.id;})); };
+      r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbPut(rec){
+  return tx("readwrite").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.put(rec);
+      r.onsuccess=function(){ res(); }; r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbDel(ids){
+  return tx("readwrite").then(function(st){
+    return Promise.all(ids.map(function(id){
+      return new Promise(function(res){ var r=st.delete(id); r.onsuccess=function(){res();}; r.onerror=function(){res();}; });
+    }));
+  });
 }
 
+/* ═══════════ 狀態 ═══════════ */
+var curItem=S.items[0]||"";
+var photos=[];        // {id,item,area,work,blob,time,uploaded}
+var selected={};      // {id:true}
+var urlCache={};      // id -> objectURL
+
+function countOf(name){
+  var n=0; photos.forEach(function(p){ if(p.item===name) n++; }); return n;
+}
+function selIds(){
+  return Object.keys(selected).filter(function(k){return selected[k];}).map(Number);
+}
+
+/* ═══════════ 畫面：拍照頁 ═══════════ */
 function renderNow(){
-  var card=$("nowCard");
-  if(allDone()){
-    card.classList.add("done");
-    $("nowItem").textContent="全部拍完 ✓";
-    $("nowMeta").textContent=S.items.length+" 項完成";
-    $("shutter").textContent="再拍一張（"+(itemName(cur)||"—")+"）";
-  }else{
-    card.classList.remove("done");
-    $("nowItem").textContent=itemName(cur)||"（尚未設定檢查項目）";
-    var d=S.items.filter(function(n){return doneSet[n];}).length;
-    $("nowMeta").textContent=(S.area||"未設定區域")+"　·　"+d+" / "+S.items.length+" 已拍";
-    $("shutter").textContent="拍照";
-  }
+  $("nowItem").textContent=curItem||"（尚未設定檢查項目）";
+  $("nowMeta").textContent=(S.area||"未設定區域")+"　·　這一項已拍 "+countOf(curItem)+" 張";
 }
-
-function renderSteps(){
-  var ul=$("steps"); ul.innerHTML="";
-  S.items.forEach(function(name,i){
-    var li=document.createElement("li");
-    if(doneSet[name]) li.className="ok";
-    if(i===cur&&!allDone()) li.className=(li.className?li.className+" ":"")+"cur";
-    var dot=document.createElement("span");
-    dot.className="dot"; dot.textContent=doneSet[name]?"✓":String(i+1);
-    var t=document.createElement("span"); t.className="t"; t.textContent=name;
-    var jump=document.createElement("button");
-    jump.className="jump"; jump.type="button"; jump.textContent="選這項";
-    jump.addEventListener("click",function(){ cur=i; renderNow(); renderSteps(); });
-    li.appendChild(dot); li.appendChild(t); li.appendChild(jump);
-    ul.appendChild(li);
+function renderItemBtns(){
+  var box=$("itemBtns"); box.innerHTML="";
+  S.items.forEach(function(name){
+    var b=document.createElement("button");
+    b.type="button";
+    b.className="item-btn"+(name===curItem?" on":"");
+    var t=document.createElement("span"); t.textContent=name;
+    var n=document.createElement("span"); n.className="n";
+    var c=countOf(name); n.textContent=c?c:"";
+    b.appendChild(t); b.appendChild(n);
+    b.addEventListener("click",function(){
+      curItem=name; renderNow(); renderItemBtns();
+    });
+    box.appendChild(b);
   });
 }
 
 /* ═══════════ 相機 ═══════════ */
 var stream=null, facing="environment", camReady=false;
-
 function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; } }
-
 function startCam(){
-  camReady=false; $("shutter").disabled=true;
-  stopCam();
+  camReady=false; $("shutter").disabled=true; stopCam();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
-    $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari 開啟，且網址必須是 https。";
+    $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari，且網址必須是 https。";
     return;
   }
   navigator.mediaDevices.getUserMedia({
     video:{facingMode:facing,width:{ideal:1920},height:{ideal:1440}},audio:false
   }).then(function(st){
-    stream=st;
-    var v=$("video"); v.srcObject=st;
-    return v.play();
+    stream=st; var v=$("video"); v.srcObject=st; return v.play();
   }).then(function(){
-    camReady=true; $("shutter").disabled=false;
-    $("camMsg").style.display="none";
+    camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
   }).catch(function(err){
     var m=err&&err.name?err.name:"";
     var msg="相機打不開："+(err&&err.message?err.message:m);
-    if(m==="NotAllowedError") msg="相機權限被拒。請在網址列旁的鎖頭圖示允許「相機」，再重新整理。";
+    if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
     if(m==="NotFoundError") msg="找不到相機裝置。";
-    $("camMsg").style.display="grid";
-    $("camMsg").textContent=msg;
+    $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
   });
 }
 
 /* ═══════════ 浮水印 ═══════════ */
-function stamp(cv,item){
-  var ctx=cv.getContext("2d");
-  var W=cv.width, H=cv.height;
-  var u=Math.max(W,H)/1000;                    // 縮放單位，讓浮水印在各解析度一致
-  var pad=22*u, lh=34*u, fs=25*u;
-  var rows=[
-    ["維運區域: ", S.area||"—"],
-    ["拍攝時間: ", fmtDate(new Date())],
-    ["維運內容: ", S.work||"—"],
-    ["檢查項目: ", item||"—"]
-  ];
-  ctx.font="700 "+fs+"px "+getComputedStyle(document.body).fontFamily;
-  var wMax=0;
-  rows.forEach(function(r){ wMax=Math.max(wMax,ctx.measureText(r[0]+r[1]).width); });
-
-  var titleH=42*u;
-  var boxW=Math.min(wMax+pad*2, W-24*u);
-  var boxH=titleH+lh*rows.length+pad*1.4;
-  var x=18*u, y=H-boxH-18*u;
-
-  ctx.fillStyle="rgba(255,255,255,.86)";
-  roundRect(ctx,x,y,boxW,boxH,10*u); ctx.fill();
-
-  ctx.fillStyle="rgba(31,94,168,.92)";
-  roundRect(ctx,x,y,boxW,titleH,10*u); ctx.fill();
-  ctx.fillStyle="#fff";
-  ctx.font="800 "+(24*u)+"px "+getComputedStyle(document.body).fontFamily;
-  ctx.textBaseline="middle";
-  ctx.fillText("維運記錄",x+pad,y+titleH/2);
-
-  ctx.textBaseline="alphabetic";
-  var ty=y+titleH+pad*0.55+fs;
-  rows.forEach(function(r){
-    ctx.font="700 "+fs+"px "+getComputedStyle(document.body).fontFamily;
-    ctx.fillStyle="#1f3a52"; ctx.fillText(r[0],x+pad,ty);
-    var kw=ctx.measureText(r[0]).width;
-    ctx.fillStyle="#14181B"; ctx.fillText(r[1],x+pad+kw,ty);
-    ty+=lh;
-  });
-  return cv;
+function fmtTime(d){
+  var p=function(n){return (n<10?"0":"")+n;};
+  return d.getFullYear()+"."+p(d.getMonth()+1)+"."+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function fmtFile(d){
+  var p=function(n){return (n<10?"0":"")+n;};
+  return ""+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+
+    p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
 }
 function roundRect(ctx,x,y,w,h,r){
   ctx.beginPath();
@@ -412,188 +509,445 @@ function roundRect(ctx,x,y,w,h,r){
   ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
   ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
 }
-function fmtDate(d){
-  var p=function(n){return (n<10?"0":"")+n;};
-  return d.getFullYear()+"."+p(d.getMonth()+1)+"."+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+function stamp(cv,item,when){
+  var ctx=cv.getContext("2d"), W=cv.width, H=cv.height;
+  var u=Math.max(W,H)/1000, pad=22*u, lh=34*u, fs=25*u;
+  var font=getComputedStyle(document.body).fontFamily;
+  var rows=[["維運區域: ",S.area||"—"],["拍攝時間: ",fmtTime(when)],
+            ["維運內容: ",S.work||"—"],["檢查項目: ",item||"—"]];
+  ctx.font="700 "+fs+"px "+font;
+  var wMax=0;
+  rows.forEach(function(r){ wMax=Math.max(wMax,ctx.measureText(r[0]+r[1]).width); });
+  var titleH=42*u;
+  var boxW=Math.min(wMax+pad*2,W-24*u), boxH=titleH+lh*rows.length+pad*1.4;
+  var x=18*u, y=H-boxH-18*u;
+  ctx.fillStyle="rgba(255,255,255,.86)"; roundRect(ctx,x,y,boxW,boxH,10*u); ctx.fill();
+  ctx.fillStyle="rgba(31,94,168,.92)"; roundRect(ctx,x,y,boxW,titleH,10*u); ctx.fill();
+  ctx.fillStyle="#fff"; ctx.font="800 "+(24*u)+"px "+font; ctx.textBaseline="middle";
+  ctx.fillText("維運記錄",x+pad,y+titleH/2);
+  ctx.textBaseline="alphabetic";
+  var ty=y+titleH+pad*0.55+fs;
+  rows.forEach(function(r){
+    ctx.font="700 "+fs+"px "+font;
+    ctx.fillStyle="#1f3a52"; ctx.fillText(r[0],x+pad,ty);
+    var kw=ctx.measureText(r[0]).width;
+    ctx.fillStyle="#14181B"; ctx.fillText(r[1],x+pad+kw,ty);
+    ty+=lh;
+  });
+  return cv;
 }
 
-/* ═══════════ AI（Teachable Machine，自訓） ═══════════ */
-var model=null, modelLabels=[];
-
-function setModelState(html,warn){
-  var el=$("modelState");
-  el.className="note"+(warn?" warn":"");
-  el.innerHTML=html;
+/* ═══════════ AI ═══════════ */
+var model=null;
+function setNote(el,html,cls){
+  el.className="note"+(cls?" "+cls:""); el.innerHTML=html; el.classList.remove("hidden");
 }
-
 function loadModel(url){
   url=(url||"").trim();
-  if(!url){ setModelState("<b>狀態：</b>未載入（順序推進模式）",false); return Promise.resolve(false); }
+  if(!url){ setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）"); return Promise.resolve(false); }
   if(url.slice(-1)!=="/") url+="/";
   if(typeof tmImage==="undefined"){
-    setModelState("<b>狀態：</b>載入失敗 — 辨識程式庫沒下載到（可能離線，或這個頁面擋掉了外部程式庫）。順序推進仍可正常使用。",true);
+    setNote($("modelState"),"<b>狀態：</b>辨識程式庫沒下載到（可能離線）。手動選項目仍可正常使用。","warn");
     return Promise.resolve(false);
   }
-  setModelState("<b>狀態：</b>載入中…",false);
+  setNote($("modelState"),"<b>狀態：</b>載入中…");
   return tmImage.load(url+"model.json",url+"metadata.json").then(function(m){
-    model=m;
-    modelLabels=(m.getClassLabels?m.getClassLabels():[])||[];
-    S.model=url; saveSet();
-    var known=modelLabels.filter(function(l){return S.items.indexOf(l)>=0;});
-    var msg="<b>狀態：</b>已載入 ✓ 類別："+modelLabels.join("、");
+    model=m; S.model=url; writeJSON(SET_KEY,S);
+    var labels=(m.getClassLabels?m.getClassLabels():[])||[];
+    var known=labels.filter(function(l){return S.items.indexOf(l)>=0;});
+    var msg="<b>狀態：</b>已載入 ✓ 類別："+labels.join("、");
     if(!known.length){
-      msg+="<br><b>注意：</b>模型類別和你的檢查項目對不起來，辨識結果會無法自動跳項。請把兩邊文字改成一致。";
-      setModelState(msg,true);
-    }else{
-      setModelState(msg,false);
-    }
-    $("aiChip").classList.remove("hidden");
-    $("aiChip").textContent="AI 已就緒";
+      setNote($("modelState"),msg+"<br><b>注意：</b>模型類別和檢查項目對不起來，辨識結果無法自動套用。請把兩邊文字改成一致。","warn");
+    }else setNote($("modelState"),msg,"ok");
+    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
     return true;
   }).catch(function(err){
     model=null;
-    setModelState("<b>狀態：</b>載入失敗 — "+(err&&err.message?err.message:err)+
-      "<br>檢查網址是否為 Teachable Machine「Upload my model」給的那串，且手機此刻能連網。順序推進仍可正常使用。",true);
+    setNote($("modelState"),"<b>狀態：</b>載入失敗 — "+errText(err)+
+      "<br>確認網址是 Teachable Machine「Upload my model」給的那串，且此刻能連網。手動選項目不受影響。","bad");
     $("aiChip").classList.add("hidden");
     return false;
   });
 }
-
 function classify(cv){
   if(!model) return Promise.resolve(null);
-  return model.predict(cv).then(function(preds){
-    if(!preds||!preds.length) return null;
-    preds.sort(function(a,b){return b.probability-a.probability;});
-    return {label:preds[0].className, p:preds[0].probability};
+  return model.predict(cv).then(function(p){
+    if(!p||!p.length) return null;
+    p.sort(function(a,b){return b.probability-a.probability;});
+    return {label:p[0].className,prob:p[0].probability};
   }).catch(function(){ return null; });
 }
+function errText(e){ return (e&&e.message)?e.message:String(e); }
 
-/* ═══════════ 拍照流程 ═══════════ */
+/* ═══════════ 拍照 ═══════════ */
 var busy=false;
-
 function shoot(){
   if(!camReady||busy) return;
   busy=true; $("shutter").disabled=true;
+  var f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
 
-  var v=$("video");
-  var cv=$("work");
-  cv.width=v.videoWidth||1280; cv.height=v.videoHeight||960;
+  var v=$("video"), cv=$("work");
+  var vw=v.videoWidth||1280, vh=v.videoHeight||960;
+  var scale=Math.min(1,1920/Math.max(vw,vh));
+  cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
   cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
 
   classify(cv).then(function(hit){
-    var item=itemName(cur);
-    if(hit&&hit.p>=0.7){
-      var idx=S.items.indexOf(hit.label);
-      if(idx>=0){ cur=idx; item=hit.label; }
-    }
+    if(hit&&hit.prob>=0.7&&S.items.indexOf(hit.label)>=0) curItem=hit.label;
     if(hit){
       $("aiChip").classList.remove("hidden");
-      $("aiChip").textContent="AI："+hit.label+" "+Math.round(hit.p*100)+"%";
+      $("aiChip").textContent="AI："+hit.label+" "+Math.round(hit.prob*100)+"%";
     }
-
-    stamp(cv,item);
-    var url=cv.toDataURL("image/jpeg",0.92);
-    shots.unshift({item:item,dataUrl:url,time:new Date().toISOString()});
-    doneSet[item]=true;
-    renderShots();
-
-    var nx=nextUndone(cur+1);
-    if(nx>=0) cur=nx;
-    renderNow(); renderSteps();
-  }).then(null,function(){}).then(function(){
+    var when=new Date();
+    stamp(cv,curItem,when);
+    return new Promise(function(res){ cv.toBlob(res,"image/jpeg",0.85); }).then(function(blob){
+      if(!blob) throw new Error("照片產生失敗");
+      return dbAdd({item:curItem,area:S.area,work:S.work,blob:blob,
+        time:when.toISOString(),uploaded:false});
+    });
+  }).then(function(){
+    return refreshPhotos();
+  }).catch(function(err){
+    alert("拍照失敗："+errText(err)+"\n\n若是空間不足，請先上傳或刪除部分照片。");
+  }).then(function(){
     busy=false; $("shutter").disabled=!camReady;
   });
 }
 
-function renderShots(){
+/* ═══════════ 照片頁 ═══════════ */
+function refreshPhotos(){
+  return dbAll().then(function(list){
+    photos=list;
+    $("tabCount").textContent=String(photos.length);
+    renderNow(); renderItemBtns(); renderGrid(); updateQuota();
+  });
+}
+function thumbURL(p){
+  if(!urlCache[p.id]) urlCache[p.id]=URL.createObjectURL(p.blob);
+  return urlCache[p.id];
+}
+function renderGrid(){
   var g=$("shotsGrid");
-  if(!shots.length){
-    g.classList.add("hidden"); $("shotsEmpty").style.display="block";
-    $("shotsNote").style.display="none"; return;
+  Object.keys(selected).forEach(function(k){
+    if(!photos.some(function(p){return String(p.id)===k;})) delete selected[k];
+  });
+  if(!photos.length){
+    g.classList.add("hidden"); $("shotsEmpty").classList.remove("hidden");
+    $("selBar").classList.add("hidden"); $("actSec").classList.add("hidden");
+    return;
   }
-  g.classList.remove("hidden"); $("shotsEmpty").style.display="none";
-  $("shotsNote").style.display="block";
+  g.classList.remove("hidden"); $("shotsEmpty").classList.add("hidden");
+  $("selBar").classList.remove("hidden"); $("actSec").classList.remove("hidden");
   g.innerHTML="";
-  shots.forEach(function(s){
-    var d=document.createElement("div"); d.className="shot";
-    var im=document.createElement("img"); im.src=s.dataUrl; im.alt=s.item;
-    var cap=document.createElement("div"); cap.className="cap";
-    cap.textContent=s.item;
-    var sm=document.createElement("small"); sm.textContent=fmtDate(new Date(s.time));
-    cap.appendChild(sm);
-    d.appendChild(im); d.appendChild(cap); g.appendChild(d);
+  photos.forEach(function(p){
+    var d=document.createElement("div");
+    d.className="thumb"+(selected[p.id]?" sel":"");
+    var im=document.createElement("img"); im.src=thumbURL(p); im.alt=p.item; im.loading="lazy";
+    var mk=document.createElement("span"); mk.className="mark"; mk.textContent=selected[p.id]?"✓":"";
+    d.appendChild(im); d.appendChild(mk);
+    if(p.uploaded){ var up=document.createElement("span"); up.className="up"; up.textContent="✓ NAS"; d.appendChild(up); }
+    var cap=document.createElement("div"); cap.className="cap"; cap.textContent=p.item;
+    var sm=document.createElement("small"); sm.textContent=fmtTime(new Date(p.time));
+    cap.appendChild(sm); d.appendChild(cap);
+    d.addEventListener("click",function(){
+      if(selected[p.id]) delete selected[p.id]; else selected[p.id]=true;
+      renderGrid();
+    });
+    g.appendChild(d);
+  });
+  updateSelInfo();
+}
+function updateSelInfo(){
+  var n=selIds().length;
+  $("selInfo").textContent="已選 "+n+" / 共 "+photos.length;
+  $("btnUpload").disabled=!n; $("btnShare").disabled=!n; $("btnDel").disabled=!n;
+}
+
+/* ═══════════ 存到相簿（系統分享） ═══════════ */
+function shareSelected(){
+  var ids=selIds();
+  if(!ids.length) return;
+  var files=photos.filter(function(p){return ids.indexOf(p.id)>=0;}).map(function(p){
+    return new File([p.blob],fileNameOf(p),{type:"image/jpeg"});
+  });
+  if(!navigator.canShare||!navigator.canShare({files:files})){
+    setNote($("actState"),
+      "<b>這個瀏覽器不支援分享圖片檔。</b>改用：長按單張照片 →「加入照片」／「下載圖片」，"+
+      "或改用上傳 NAS。iPhone 請確認是用 Safari 開啟。","bad");
+    return;
+  }
+  navigator.share({files:files}).then(function(){
+    setNote($("actState"),"<b>已送出 "+files.length+" 張到分享面板。</b>在面板選「儲存影像」即可存進相簿。","ok");
+  }).catch(function(err){
+    if(err&&err.name==="AbortError"){ $("actState").classList.add("hidden"); return; }
+    setNote($("actState"),"<b>分享失敗：</b>"+errText(err)+
+      "<br>一次選太多張容易失敗，試試一次 10 張以內。","bad");
+  });
+}
+function fileNameOf(p){
+  return fmtFile(new Date(p.time))+"_"+(p.item||"未分類")+".jpg";
+}
+
+/* ═══════════ Synology 上傳 ═══════════ */
+var SYNO_ERR={
+  100:"未知錯誤",101:"參數不正確",102:"找不到 API，確認網址是不是 NAS 的 DSM 位址",
+  103:"這個 API 方法不存在",105:"權限不足",106:"連線逾時",107:"連線被中斷",
+  400:"帳號或密碼錯誤",401:"帳號已停用",402:"權限不足",
+  403:"這個帳號開了二階段驗證，請填驗證碼",404:"二階段驗證碼錯誤或已過期",
+  406:"需要先設定 email",407:"IP 被 NAS 封鎖，請到 DSM 解除封鎖",408:"密碼已過期，請先到 DSM 改密碼",
+  119:"連線階段已失效，請再試一次",
+  1001:"上傳的參數不正確",1002:"上傳時發生錯誤",1003:"上傳被取消",
+  1805:"無法建立資料夾，確認路徑和寫入權限"
+};
+function synoErr(code){ return SYNO_ERR[code]||("錯誤碼 "+code); }
+
+function nasBase(){
+  var h=(NAS.host||"").trim().replace(/\/+$/,"");
+  return h||location.origin;
+}
+function synoLogin(){
+  var body=new URLSearchParams({
+    api:"SYNO.API.Auth",version:"6",method:"login",
+    account:NAS.user||"",passwd:NAS.pass||"",session:"FileStation",format:"sid"
+  });
+  var otp=($("nOtp").value||"").trim();
+  if(otp) body.set("otp_code",otp);
+  return fetch(nasBase()+"/webapi/auth.cgi",{method:"POST",body:body})
+    .then(function(r){
+      if(!r.ok) throw new Error("NAS 回應 HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      return j.data.sid;
+    })
+    .catch(function(err){
+      if(err instanceof TypeError)
+        throw new Error("連不到 NAS。可能是網址錯誤、NAS 不在線上，或瀏覽器擋下跨網域請求（CORS）");
+      throw err;
+    });
+}
+function synoUpload(sid,p){
+  var fd=new FormData();
+  fd.append("api","SYNO.FileStation.Upload");
+  fd.append("version","2");
+  fd.append("method","upload");
+  fd.append("path",NAS.path||"");
+  fd.append("create_parents","true");
+  fd.append("overwrite","true");
+  fd.append("_sid",sid);
+  fd.append("file",p.blob,fileNameOf(p));
+  return fetch(nasBase()+"/webapi/entry.cgi?_sid="+encodeURIComponent(sid),{method:"POST",body:fd})
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      return true;
+    });
+}
+function synoLogout(sid){
+  var body=new URLSearchParams({api:"SYNO.API.Auth",version:"6",method:"logout",session:"FileStation",_sid:sid});
+  return fetch(nasBase()+"/webapi/auth.cgi",{method:"POST",body:body}).catch(function(){});
+}
+
+var uploading=false;
+function uploadSelected(){
+  if(uploading) return;
+  var ids=selIds();
+  if(!ids.length) return;
+  if(!NAS.user||!NAS.pass){
+    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 2 區填好再上傳。","warn");
+    return;
+  }
+  if(!NAS.path){
+    setNote($("actState"),"<b>還沒填上傳資料夾。</b>到設定頁第 2 區填好再上傳。","warn");
+    return;
+  }
+  var todo=photos.filter(function(p){return ids.indexOf(p.id)>=0;});
+  uploading=true; $("btnUpload").disabled=true;
+  setNote($("actState"),"<b>登入 NAS…</b>");
+
+  var okN=0, failN=0, firstErr="";
+  synoLogin().then(function(sid){
+    var chain=Promise.resolve();
+    todo.forEach(function(p,i){
+      chain=chain.then(function(){
+        setNote($("actState"),"<b>上傳中 "+(i+1)+" / "+todo.length+"</b>　"+p.item);
+        return synoUpload(sid,p).then(function(){
+          okN++; p.uploaded=true; return dbPut(p);
+        }).catch(function(err){
+          failN++; if(!firstErr) firstErr=errText(err);
+        });
+      });
+    });
+    return chain.then(function(){ return synoLogout(sid); });
+  }).then(function(){
+    return refreshPhotos();
+  }).then(function(){
+    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+NAS.path+"</code>","ok");
+    else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
+  }).catch(function(err){
+    setNote($("actState"),"<b>上傳中止：</b>"+errText(err),"bad");
+  }).then(function(){
+    uploading=false; updateSelInfo();
   });
 }
 
-/* ═══════════ 設定頁 ═══════════ */
-function fillSetForm(){
+function testNas(){
+  if(!NAS.user||!NAS.pass){ setNote($("nasState"),"<b>請先填帳號和密碼。</b>","warn"); return; }
+  setNote($("nasState"),"<b>連線中…</b>");
+  synoLogin().then(function(sid){
+    setNote($("nasState"),"<b>連線成功 ✓</b> 帳號密碼正確，NAS 可以連到。","ok");
+    return synoLogout(sid);
+  }).catch(function(err){
+    setNote($("nasState"),"<b>連線失敗：</b>"+errText(err),"bad");
+  });
+}
+
+/* ═══════════ 儲存空間 ═══════════ */
+function mb(n){ return (n/1048576).toFixed(1)+" MB"; }
+function updateQuota(){
+  var used=0; photos.forEach(function(p){ used+=(p.blob&&p.blob.size)||0; });
+  if(!navigator.storage||!navigator.storage.estimate){
+    $("quotaText").textContent=photos.length+" 張照片，佔用 "+mb(used);
+    $("quotaBar").style.width="0";
+    return;
+  }
+  navigator.storage.estimate().then(function(est){
+    var quota=est.quota||0;
+    var pct=quota?Math.min(100,(used/quota)*100):0;
+    $("quotaText").textContent=photos.length+" 張照片，佔用 "+mb(used)+
+      (quota?("　/　這個瀏覽器可用 "+mb(quota)):"");
+    var bar=$("quotaBar");
+    bar.style.width=pct.toFixed(1)+"%";
+    bar.className=pct>70?"warn":"";
+  });
+}
+function initPersist(){
+  var el=$("persistNote");
+  if(!navigator.storage||!navigator.storage.persist){
+    setNote(el,"<b>提醒：</b>照片只存在這支手機的瀏覽器裡。清除瀏覽器資料就會消失，"+
+      "重要照片請當天上傳 NAS 或存進相簿。","warn");
+    return;
+  }
+  navigator.storage.persisted().then(function(has){
+    if(has){ setNote(el,"<b>已設為持久儲存 ✓</b> 系統不會自動清掉這些照片。不過清除瀏覽器資料仍會刪除。","ok"); return; }
+    return navigator.storage.persist().then(function(ok){
+      if(ok) setNote(el,"<b>已設為持久儲存 ✓</b> 系統不會自動清掉這些照片。","ok");
+      else setNote(el,"<b>提醒：</b>瀏覽器沒給持久儲存權限，空間不足時系統可能自動清掉照片。"+
+        "iPhone 上長時間沒開這個網頁也可能被清除。<b>請當天就上傳 NAS。</b>","warn");
+    });
+  });
+}
+
+/* ═══════════ 設定頁事件 ═══════════ */
+function fillForms(){
   $("sArea").value=S.area; $("sWork").value=S.work;
   $("sItems").value=S.items.join("\n"); $("sModel").value=S.model;
+  $("nHost").value=NAS.host; $("nUser").value=NAS.user;
+  $("nPass").value=NAS.remember?NAS.pass:"";
+  $("nPath").value=NAS.path; $("nRemember").checked=!!NAS.remember;
 }
 $("btnSaveSet").addEventListener("click",function(){
   var items=$("sItems").value.split("\n").map(function(x){return x.trim();}).filter(Boolean);
   if(!items.length){ alert("至少要有一個檢查項目。"); return; }
-  S.area=$("sArea").value.trim();
-  S.work=$("sWork").value.trim();
-  S.items=items;
-  saveSet();
-  Object.keys(doneSet).forEach(function(k){ if(items.indexOf(k)<0) delete doneSet[k]; });
-  var nx=nextUndone(0); cur=nx>=0?nx:0;
-  renderNow(); renderSteps();
+  S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim(); S.items=items;
+  writeJSON(SET_KEY,S);
+  if(items.indexOf(curItem)<0) curItem=items[0];
+  renderNow(); renderItemBtns();
   alert("已儲存。");
+});
+$("btnNasSave").addEventListener("click",function(){
+  NAS.host=$("nHost").value.trim();
+  NAS.user=$("nUser").value.trim();
+  NAS.pass=$("nPass").value;
+  NAS.path=$("nPath").value.trim();
+  NAS.remember=$("nRemember").checked;
+  var toSave={host:NAS.host,user:NAS.user,path:NAS.path,remember:NAS.remember,
+    pass:NAS.remember?NAS.pass:""};
+  writeJSON(NAS_KEY,toSave);
+  setNote($("nasState"),NAS.remember
+    ? "<b>已儲存（含密碼）。</b>密碼是明文存在這支手機裡。"
+    : "<b>已儲存。</b>密碼沒有記住，這次開啟期間有效，重新整理後要再輸入一次。","ok");
+});
+$("btnNasTest").addEventListener("click",function(){
+  NAS.host=$("nHost").value.trim(); NAS.user=$("nUser").value.trim();
+  NAS.pass=$("nPass").value; NAS.path=$("nPath").value.trim();
+  testNas();
 });
 $("btnLoadModel").addEventListener("click",function(){ loadModel($("sModel").value); });
 $("btnUnloadModel").addEventListener("click",function(){
-  model=null; S.model=""; saveSet(); $("sModel").value="";
+  model=null; S.model=""; writeJSON(SET_KEY,S); $("sModel").value="";
   $("aiChip").classList.add("hidden");
-  setModelState("<b>狀態：</b>未載入（順序推進模式）",false);
+  setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
+});
+$("btnRefreshQuota").addEventListener("click",updateQuota);
+$("btnWipe").addEventListener("click",function(){
+  if(!photos.length){ alert("沒有照片。"); return; }
+  if(!confirm("刪除全部 "+photos.length+" 張照片？\n沒上傳或沒存相簿的會永久消失。")) return;
+  dbDel(photos.map(function(p){return p.id;})).then(function(){
+    Object.keys(urlCache).forEach(function(k){ URL.revokeObjectURL(urlCache[k]); });
+    urlCache={}; selected={}; return refreshPhotos();
+  });
 });
 
-/* ═══════════ 綁定 ═══════════ */
-$("shutter").addEventListener("click",shoot);
-$("btnPrev").addEventListener("click",function(){
-  if(!S.items.length) return;
-  cur=(cur-1+S.items.length)%S.items.length; renderNow(); renderSteps();
+/* ═══════════ 照片頁事件 ═══════════ */
+$("btnSelAll").addEventListener("click",function(){
+  photos.forEach(function(p){ selected[p.id]=true; }); renderGrid();
 });
-$("btnSkip").addEventListener("click",function(){
-  if(!S.items.length) return;
-  cur=(cur+1)%S.items.length; renderNow(); renderSteps();
+$("btnSelNone").addEventListener("click",function(){ selected={}; renderGrid(); });
+$("btnSelNotUp").addEventListener("click",function(){
+  selected={}; photos.forEach(function(p){ if(!p.uploaded) selected[p.id]=true; }); renderGrid();
 });
-$("btnFlip").addEventListener("click",function(){
-  facing=(facing==="environment")?"user":"environment"; startCam();
-});
-$("btnReset").addEventListener("click",function(){
-  if(!confirm("重設進度？（已拍的照片會保留）")) return;
-  doneSet={}; cur=0; renderNow(); renderSteps();
-});
-$("btnClearShots").addEventListener("click",function(){
-  if(!confirm("清空本次照片？沒存到相簿的會不見。")) return;
-  shots=[]; renderShots();
+$("btnShare").addEventListener("click",shareSelected);
+$("btnUpload").addEventListener("click",uploadSelected);
+$("btnDel").addEventListener("click",function(){
+  var ids=selIds(); if(!ids.length) return;
+  var notUp=photos.filter(function(p){return ids.indexOf(p.id)>=0&&!p.uploaded;}).length;
+  var msg="刪除選取的 "+ids.length+" 張？";
+  if(notUp) msg+="\n其中 "+notUp+" 張還沒上傳 NAS，刪掉就沒了。";
+  if(!confirm(msg)) return;
+  dbDel(ids).then(function(){
+    ids.forEach(function(id){
+      if(urlCache[id]){ URL.revokeObjectURL(urlCache[id]); delete urlCache[id]; }
+      delete selected[id];
+    });
+    return refreshPhotos();
+  });
 });
 
+/* ═══════════ 分頁 ═══════════ */
 Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
   t.addEventListener("click",function(){
     Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
     t.classList.add("on");
     Array.prototype.forEach.call(document.querySelectorAll(".page"),function(p){p.classList.remove("on");});
     $(t.dataset.p).classList.add("on");
+    if(t.dataset.p==="pSet") updateQuota();
   });
 });
 
 /* ═══════════ 啟動 ═══════════ */
-fillSetForm();
-var nx0=nextUndone(0); cur=nx0>=0?nx0:0;
-renderNow(); renderSteps(); renderShots();
+$("shutter").addEventListener("click",shoot);
+$("btnFlip").addEventListener("click",function(){
+  facing=(facing==="environment")?"user":"environment"; startCam();
+});
+window.addEventListener("pagehide",stopCam);
+
+fillForms();
+renderNow(); renderItemBtns();
+refreshPhotos();
+initPersist();
 startCam();
 if(S.model) loadModel(S.model);
 
-window.addEventListener("pagehide",stopCam);
-
-/* 供自動化測試用 */
 window.__pv={
-  stamp:stamp, get shots(){return shots;}, get set(){return S;},
-  get cur(){return cur;}, get done(){return doneSet;},
-  _shoot:shoot, _nextUndone:nextUndone
+  stamp:stamp, get photos(){return photos;}, get set(){return S;},
+  get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
+  setCur:function(v){ curItem=v; renderNow(); renderItemBtns(); },
+  _shoot:shoot, _refresh:refreshPhotos, _fileName:fileNameOf, _synoErr:synoErr
 };
 })();
 </script>
