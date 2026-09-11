@@ -263,9 +263,11 @@
       <div class="sec-body">
         <div class="field">
           <label>NAS 網址</label>
-          <input id="nHost" type="url" placeholder="https://你的NAS:5001">
+          <input id="nHost" type="url" placeholder="https://你的網域/pvapi/proxy.php">
           <p class="hint">
-            留空＝用目前這個網頁的網域（把這個頁面放在 NAS 的 Web Station 時就留空，最省事）。
+            走 NAS 上的轉發程式時，填到 <code>proxy.php</code> 為止，後面不要加東西。<br>
+            直接填 DSM 位址（如 <code>https://你的NAS:5001</code>）也可以，但只有在這個頁面
+            與 DSM 同一個網域和連接埠時才不會被瀏覽器擋下。
           </p>
         </div>
         <div class="row2">
@@ -729,10 +731,19 @@ function nasPath(){
   return p;
 }
 
+// 網址以 .php 結尾＝走 NAS 上的同源轉發程式，端點用查詢參數指定；
+// 否則直接打 DSM 的 /webapi/。
+function apiUrl(cgi,qs){
+  var base=nasBase();
+  if(/\.php$/i.test(base))
+    return base+"?_cgi="+encodeURIComponent(cgi)+(qs?"&"+qs:"");
+  return base+"/webapi/"+cgi+(qs?"?"+qs:"");
+}
+
 // 分辨「連不到 NAS」與「連得到但被 CORS 擋」：
 // no-cors 請求不受 CORS 阻擋，只有網路層真的不通時才會失敗。
 function diagnose(){
-  return fetch(nasBase()+"/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query",
+  return fetch(apiUrl("query.cgi","api=SYNO.API.Info&version=1&method=query"),
     {mode:"no-cors"}).then(function(){ return "cors"; })
     .catch(function(){ return "unreachable"; });
 }
@@ -751,7 +762,7 @@ function synoLogin(){
   });
   var otp=($("nOtp").value||"").trim();
   if(otp) body.set("otp_code",otp);
-  return fetch(nasBase()+"/webapi/auth.cgi",{method:"POST",body:body})
+  return fetch(apiUrl("auth.cgi"),{method:"POST",body:body})
     .then(function(r){
       if(!r.ok) throw new Error("NAS 回應 HTTP "+r.status);
       return r.json();
@@ -776,7 +787,7 @@ function synoUpload(sid,p){
   fd.append("overwrite","true");
   fd.append("_sid",sid);
   fd.append("file",p.blob,fileNameOf(p));
-  return fetch(nasBase()+"/webapi/entry.cgi?_sid="+encodeURIComponent(sid),{method:"POST",body:fd})
+  return fetch(apiUrl("entry.cgi","_sid="+encodeURIComponent(sid)),{method:"POST",body:fd})
     .then(function(r){
       if(!r.ok) throw new Error("HTTP "+r.status);
       return r.json();
@@ -788,7 +799,7 @@ function synoUpload(sid,p){
 }
 function synoLogout(sid){
   var body=new URLSearchParams({api:"SYNO.API.Auth",version:"6",method:"logout",session:"FileStation",_sid:sid});
-  return fetch(nasBase()+"/webapi/auth.cgi",{method:"POST",body:body}).catch(function(){});
+  return fetch(apiUrl("auth.cgi"),{method:"POST",body:body}).catch(function(){});
 }
 
 var uploading=false;
@@ -974,7 +985,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-11b";
+var APP_VERSION="2026-09-11c";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){

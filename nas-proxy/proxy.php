@@ -9,6 +9,7 @@
  * 這支程式與拍照頁同樣由 Web Station 在 443 提供，因此對瀏覽器而言是同源；
  * 它在 NAS 內部把請求轉給 DSM，再把結果原樣送回。
  *
+ * 用法：proxy.php?_cgi=auth.cgi，其餘查詢參數原樣轉送。
  * 對外只開放照片上傳所需的三個端點，其餘一律拒絕。
  */
 
@@ -25,23 +26,22 @@ function refuse(int $code, string $why): never {
     exit;
 }
 
-$pathInfo = $_SERVER['PATH_INFO'] ?? '';
-if ($pathInfo === '') {
-    refuse(400, '缺少路徑。正確用法：本檔案網址後面直接接 /webapi/auth.cgi');
+// 目標端點以查詢參數指定。不用 PATH_INFO，因為 Web Station 的 nginx
+// 只把結尾是 .php 的網址交給 PHP，proxy.php/webapi/... 會被當成找不到的檔案。
+$cgi = $_GET['_cgi'] ?? '';
+if ($cgi === '') {
+    refuse(400, '缺少 _cgi 參數。正確用法：本檔案網址後面接 ?_cgi=auth.cgi');
 }
-
-// 只收 /webapi/<白名單>.cgi，擋掉路徑穿越與其他端點
-if (!preg_match('#^/webapi/([A-Za-z0-9_.-]+)$#', $pathInfo, $m)) {
-    refuse(403, '路徑格式不允許');
-}
-$cgi = $m[1];
 if (!in_array($cgi, ALLOWED, true)) {
     refuse(403, '這個端點未開放：' . $cgi);
 }
 
+// 其餘查詢參數原樣轉給 DSM（例如上傳用的 _sid）
+$query = $_GET;
+unset($query['_cgi']);
 $target = DSM_BASE . '/webapi/' . $cgi;
-if (($_SERVER['QUERY_STRING'] ?? '') !== '') {
-    $target .= '?' . $_SERVER['QUERY_STRING'];
+if ($query !== []) {
+    $target .= '?' . http_build_query($query);
 }
 
 $ch = curl_init($target);
