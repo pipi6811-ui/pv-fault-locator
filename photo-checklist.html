@@ -575,7 +575,7 @@ function loadModel(url){
     model=m; S.model=url; writeJSON(SET_KEY,S);
     var labels=(m.getClassLabels?m.getClassLabels():[])||[];
     var known=labels.filter(function(l){return S.items.indexOf(l)>=0;});
-    var msg="<b>狀態：</b>已載入 ✓ 類別："+labels.join("、");
+    var msg="<b>狀態：</b>已載入 ✓ 類別："+esc(labels.join("、"));
     if(!known.length){
       setNote($("modelState"),msg+"<br><b>注意：</b>模型類別和檢查項目對不起來，辨識結果無法自動套用。請把兩邊文字改成一致。","warn");
     }else setNote($("modelState"),msg,"ok");
@@ -583,7 +583,7 @@ function loadModel(url){
     return true;
   }).catch(function(err){
     model=null;
-    setNote($("modelState"),"<b>狀態：</b>載入失敗 — "+errText(err)+
+    setNote($("modelState"),"<b>狀態：</b>載入失敗 — "+errHtml(err)+
       "<br>確認網址是 Teachable Machine「Upload my model」給的那串，且此刻能連網。手動選項目不受影響。","bad");
     $("aiChip").classList.add("hidden");
     return false;
@@ -700,7 +700,7 @@ function shareSelected(){
     setNote($("actState"),"<b>已送出 "+files.length+" 張到分享面板。</b>在面板選「儲存影像」即可存進相簿。","ok");
   }).catch(function(err){
     if(err&&err.name==="AbortError"){ $("actState").classList.add("hidden"); return; }
-    setNote($("actState"),"<b>分享失敗：</b>"+errText(err)+
+    setNote($("actState"),"<b>分享失敗：</b>"+errHtml(err)+
       "<br>一次選太多張容易失敗，試試一次 10 張以內。","bad");
   });
 }
@@ -747,12 +747,24 @@ function diagnose(){
     {mode:"no-cors"}).then(function(){ return "cors"; })
     .catch(function(){ return "unreachable"; });
 }
+// 訊息會以 innerHTML 呈現，凡是使用者輸入或外部來源的字串都必須先轉義
+function esc(s){
+  return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+// 自製訊息含排版標記，標記後由 errHtml() 直接採用；其餘錯誤一律當純文字轉義
+function htmlErr(msg){ var e=new Error(msg); e.html=true; return e; }
+function errHtml(e){ return (e&&e.html)?e.message:esc(errText(e)); }
+
 function reachErr(kind){
   if(kind==="cors")
-    return new Error("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。"+
-      "因為這個網頁不是從 NAS 本身提供的。解法：把頁面放到 NAS 的 Web Station，"+
-      "或在 DSM 反向代理加上 CORS 標頭");
-  return new Error("連不到 NAS。確認網址正確、NAS 在線上，"+
+    return htmlErr("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。<br>"+
+      "這個頁面在 <code>"+esc(location.origin)+"</code>，"+
+      "NAS 網址卻設成 <code>"+esc(nasBase())+"</code>，兩者不同源（網域或連接埠不一樣）。<br>"+
+      "解法：改成這個頁面同網域下的轉發程式，通常是 "+
+      "<code>"+esc(location.origin)+"/pvapi/proxy.php</code>");
+  return htmlErr("連不到 NAS。確認網址正確、NAS 在線上，"+
     "以及這支手機目前的網路（行動網路或 Wi-Fi）連得到它");
 }
 function synoLogin(){
@@ -833,7 +845,7 @@ function uploadSelected(){
         return synoUpload(sid,p).then(function(){
           okN++; p.uploaded=true; return dbPut(p);
         }).catch(function(err){
-          failN++; if(!firstErr) firstErr=errText(err);
+          failN++; if(!firstErr) firstErr=errHtml(err);
         });
       });
     });
@@ -841,10 +853,10 @@ function uploadSelected(){
   }).then(function(){
     return refreshPhotos();
   }).then(function(){
-    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+nasPath()+"</code>","ok");
+    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+esc(nasPath())+"</code>","ok");
     else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
   }).catch(function(err){
-    setNote($("actState"),"<b>上傳中止：</b>"+errText(err),"bad");
+    setNote($("actState"),"<b>上傳中止：</b>"+errHtml(err),"bad");
   }).then(function(){
     uploading=false; updateSelInfo();
   });
@@ -857,7 +869,7 @@ function testNas(){
     setNote($("nasState"),"<b>連線成功 ✓</b> 帳號密碼正確，NAS 可以連到。","ok");
     return synoLogout(sid);
   }).catch(function(err){
-    setNote($("nasState"),"<b>連線失敗：</b>"+errText(err),"bad");
+    setNote($("nasState"),"<b>連線失敗：</b>"+errHtml(err),"bad");
   });
 }
 
@@ -985,7 +997,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-11c";
+var APP_VERSION="2026-09-11d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1014,7 +1026,7 @@ function initSW(){
       });
     });
   }).catch(function(err){
-    setNote(el,"<b>離線快取啟用失敗：</b>"+errText(err)+
+    setNote(el,"<b>離線快取啟用失敗：</b>"+errHtml(err)+
       "<br>App 仍可使用，但沒網路時打不開。","bad");
   });
 }
@@ -1043,7 +1055,7 @@ $("btnSwUpdate").addEventListener("click",function(){
       setNote($("swState"),"<b>已是最新版 ✓</b> 沒網路也能開啟拍照。","ok");
     });
   }).catch(function(err){
-    setNote($("swState"),"<b>檢查失敗：</b>"+errText(err)+"（可能目前沒網路）","warn");
+    setNote($("swState"),"<b>檢查失敗：</b>"+errHtml(err)+"（可能目前沒網路）","warn");
   });
 });
 
