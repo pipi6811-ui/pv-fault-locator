@@ -3,7 +3,7 @@
    NAS 上傳一律走網路，永不快取。 */
 "use strict";
 
-var VERSION = "2026-09-11a";
+var VERSION = "2026-09-11b";
 var SHELL = "pvshoot-shell-" + VERSION;
 var RUNTIME = "pvshoot-runtime-" + VERSION;
 
@@ -49,6 +49,31 @@ function swr(req){
   });
 }
 
+// 頁面本身走 network-first：有網路一定拿到最新版，逾時或離線才退回快取。
+// 之前用 stale-while-revalidate 會讓使用者停在舊版一次載入，容易誤判功能沒更新。
+function networkFirst(req,timeoutMs){
+  return caches.open(SHELL).then(function(cache){
+    return new Promise(function(resolve){
+      var done=false;
+      var finish=function(res){ if(!done){ done=true; resolve(res); } };
+      var timer=setTimeout(function(){
+        cache.match(req).then(function(hit){ if(hit) finish(hit); });
+      },timeoutMs);
+      fetch(req).then(function(res){
+        clearTimeout(timer);
+        if(res&&res.ok) cache.put(req,res.clone());
+        finish(res);
+      }).catch(function(){
+        clearTimeout(timer);
+        cache.match(req).then(function(hit){
+          finish(hit||new Response("目前離線，且這個頁面還沒存進手機。",
+            {status:503,headers:{"Content-Type":"text/plain; charset=utf-8"}}));
+        });
+      });
+    });
+  });
+}
+
 function cacheFirst(req){
   return caches.open(RUNTIME).then(function(cache){
     return cache.match(req).then(function(hit){
@@ -70,6 +95,9 @@ self.addEventListener("fetch",function(e){
   if(url.protocol!=="http:"&&url.protocol!=="https:") return;
   if(url.pathname.indexOf("/webapi/")>=0) return;
 
-  if(url.origin===self.location.origin) e.respondWith(swr(req));
+  if(url.origin===self.location.origin){
+    if(req.mode==="navigate"||/\.html$/.test(url.pathname)) e.respondWith(networkFirst(req,4000));
+    else e.respondWith(swr(req));
+  }
   else e.respondWith(cacheFirst(req));
 });

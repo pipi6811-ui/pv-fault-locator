@@ -343,7 +343,12 @@
         <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
         <div class="btnrow">
           <button class="b2 b-sm" id="btnSwUpdate" type="button">檢查更新</button>
+          <button class="b2 b-sm" id="btnSwReset" type="button">強制抓最新版</button>
         </div>
+        <p class="hint">
+          頁面版本顯示在最下方。若畫面跟我說的對不起來，按「強制抓最新版」，
+          它會清掉快取重新下載（照片與設定不受影響）。
+        </p>
       </div>
     </section>
 
@@ -361,7 +366,7 @@
     </section>
   </div>
 
-  <footer>v3 &middot; 不限順序 &middot; 可批次上傳 NAS</footer>
+  <footer id="ver">—</footer>
 </div>
 
 <canvas id="work" class="hidden"></canvas>
@@ -969,6 +974,9 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
+var APP_VERSION="2026-09-11b";
+$("ver").textContent="版本 "+APP_VERSION;
+
 function initSW(){
   var el=$("swState");
   if(!("serviceWorker" in navigator)){
@@ -999,6 +1007,22 @@ function initSW(){
       "<br>App 仍可使用，但沒網路時打不開。","bad");
   });
 }
+$("btnSwReset").addEventListener("click",function(){
+  if(!confirm("清掉快取並重新下載最新版？\n照片和設定都不會動到。")) return;
+  setNote($("swState"),"<b>清除中…</b>");
+  var jobs=[];
+  if(window.caches) jobs.push(caches.keys().then(function(ks){
+    return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+  }));
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)
+    jobs.push(navigator.serviceWorker.getRegistrations().then(function(rs){
+      return Promise.all(rs.map(function(r){ return r.unregister(); }));
+    }));
+  Promise.all(jobs).catch(function(){}).then(function(){
+    location.reload(true);
+  });
+});
+
 $("btnSwUpdate").addEventListener("click",function(){
   if(!navigator.serviceWorker||!navigator.serviceWorker.getRegistration) return;
   setNote($("swState"),"<b>檢查中…</b>");
