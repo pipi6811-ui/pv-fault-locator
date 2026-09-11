@@ -335,7 +335,17 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">5</span><h2>怎麼訓練自己的模型</h2></div>
+      <div class="sec-head"><span class="num">5</span><h2>離線可用</h2></div>
+      <div class="sec-body">
+        <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnSwUpdate" type="button">檢查更新</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">6</span><h2>怎麼訓練自己的模型</h2></div>
       <div class="sec-body">
         <div class="note">
           <b>1.</b> 電腦開 <code>teachablemachine.withgoogle.com</code> → Get Started → <b>Image Project</b> → Standard image model<br><br>
@@ -757,6 +767,11 @@ function uploadSelected(){
   if(uploading) return;
   var ids=selIds();
   if(!ids.length) return;
+  if(navigator.onLine===false){
+    setNote($("actState"),"<b>目前沒有網路連線。</b>照片已經存在手機裡不會不見，"+
+      "回到有網路的地方再上傳就好。","warn");
+    return;
+  }
   if(!NAS.user||!NAS.pass){
     setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 2 區填好再上傳。","warn");
     return;
@@ -929,6 +944,50 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
   });
 });
 
+/* ═══════════ 離線快取 ═══════════ */
+function initSW(){
+  var el=$("swState");
+  if(!("serviceWorker" in navigator)){
+    setNote(el,"<b>這個瀏覽器不支援離線快取。</b>沒網路時 App 會打不開。","warn");
+    return;
+  }
+  if(!window.isSecureContext){
+    setNote(el,"<b>目前不是 https，離線快取無法啟用。</b>"+
+      "要用 https 開啟這個網址，沒網路時才開得起來（相機也需要 https）。","bad");
+    return;
+  }
+  navigator.serviceWorker.register("sw.js").then(function(reg){
+    if(navigator.serviceWorker.controller)
+      setNote(el,"<b>已存進手機 ✓</b> 沒網路也能開啟拍照。上傳 NAS 仍需連線。","ok");
+    else
+      setNote(el,"<b>正在存入手機…</b>完成後重新整理一次，之後沒網路也能開。","warn");
+
+    reg.addEventListener("updatefound",function(){
+      var w=reg.installing;
+      if(!w) return;
+      w.addEventListener("statechange",function(){
+        if(w.state==="installed"&&navigator.serviceWorker.controller)
+          setNote(el,"<b>有新版本 ✓</b> 關掉這個頁面再重開就會換成新版。","ok");
+      });
+    });
+  }).catch(function(err){
+    setNote(el,"<b>離線快取啟用失敗：</b>"+errText(err)+
+      "<br>App 仍可使用，但沒網路時打不開。","bad");
+  });
+}
+$("btnSwUpdate").addEventListener("click",function(){
+  if(!navigator.serviceWorker||!navigator.serviceWorker.getRegistration) return;
+  setNote($("swState"),"<b>檢查中…</b>");
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg){ initSW(); return; }
+    return reg.update().then(function(){
+      setNote($("swState"),"<b>已是最新版 ✓</b> 沒網路也能開啟拍照。","ok");
+    });
+  }).catch(function(err){
+    setNote($("swState"),"<b>檢查失敗：</b>"+errText(err)+"（可能目前沒網路）","warn");
+  });
+});
+
 /* ═══════════ 啟動 ═══════════ */
 $("shutter").addEventListener("click",shoot);
 $("btnFlip").addEventListener("click",function(){
@@ -940,6 +999,7 @@ fillForms();
 renderNow(); renderItemBtns();
 refreshPhotos();
 initPersist();
+initSW();
 startCam();
 if(S.model) loadModel(S.model);
 
