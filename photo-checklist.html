@@ -465,16 +465,45 @@ var $=function(id){return document.getElementById(id);};
 var SET_KEY="pvshoot_set";
 var NAS_KEY="pvshoot_nas";
 /* ── 各業主的檢查項目：固定值，同仁不可更改 ──
-   每家業主的表格要拍的東西不一樣，而且名稱必須全隊一致——同一個東西被
-   打成「監控箱」和「監視箱」，辨識模型會當成兩類，資料就被切一半。
    要新增業主或調整項目，改這一份就好，其餘程式不必動。
-   名稱盡量沿用既有字眼；不同業主指同一個東西時用同一個詞，訓練資料才不會被拆散。 */
+
+   一個項目可以寫成字串，或寫成物件：
+     "監控箱"                        浮水印與訓練都用「監控箱」
+     {name:"變流器", as:"逆變器"}     浮水印寫「變流器」，訓練時歸到「逆變器」
+     {name:"其他", train:false}       浮水印可以選，但不拿去訓練
+
+   as 是為了跨業主對齊：各家表格用字不同（變流器／逆變器、直流接線箱／
+   直流配電箱），浮水印必須照業主的用字，但訓練若跟著分家，同一個東西
+   會被當成兩類、資料被切一半。用 as 指回同一個訓練名稱就不會。
+
+   train:false 用在「其他」這種包山包海的項目：它底下什麼畫面都有，
+   拿去訓練只會讓模型到處誤判。 */
 var OWNERS=[
-  {name:"通用",
-   items:["太陽能板","監控箱","支架","接線盒","電纜"]}
-  // 要加業主就照這個格式往下加，例如：
-  // ,{name:"○○科技",
-  //   items:["太陽能板","逆變器","直流配電箱","交流配電箱","電表","支架"]}
+  {name:"URE",
+   items:["模組","模組支架","逆變器","直流配電箱","交流配電箱","監控箱",
+          "109躉售電表","變壓器","高壓站","破片","遮陰",
+          {name:"其他",train:false}]},
+
+  {name:"鼎日",
+   items:["模組","模組支架","線槽","管線","電纜線","逆變器",
+          "直流配電箱","交流配電箱",
+          "年檢-接地電阻(模組)","年檢-接地電阻(逆變器)",
+          "年檢-接地電阻(直流箱)","年檢-接地電阻(交流箱)",
+          "年檢-絶緣電阻(交流箱)","年檢-絶緣電阻(直流箱)",
+          "監控箱","日照計","清洗設備","109躉售電表","高壓站",
+          "MP盤","VCB內部盤體","PT盤","變壓器","破片","遮陰",
+          {name:"其他",train:false}]},
+
+  {name:"大衛",
+   items:[{name:"太陽光電模組",as:"模組"},
+          "線槽",
+          {name:"直流接線箱",as:"直流配電箱"},
+          "交流配電箱",
+          {name:"變流器",as:"逆變器"},
+          "監控箱",
+          {name:"躉售電錶",as:"109躉售電表"},
+          "破片","遮陰",
+          {name:"其他",train:false}]}
 ];
 
 function ownerNames(){ return OWNERS.map(function(o){ return o.name; }); }
@@ -482,12 +511,36 @@ function ownerOf(name){
   for(var i=0;i<OWNERS.length;i++) if(OWNERS[i].name===name) return OWNERS[i];
   return OWNERS[0];
 }
-// 拍照頁的按鈕、浮水印可用的項目，一律以目前業主為準
-function curItems(){ return ownerOf(S.owner).items.slice(); }
-// 訓練樣本跨業主共用，比對名稱時要看所有業主的項目，否則別家的會被誤判成打錯字
+function itemDefs(){ return ownerOf(S.owner).items; }
+function defName(d){ return (typeof d==="string")?d:d.name; }
+function defKey(d){ return (typeof d==="string")?d:(d.as||d.name); }
+function defTrain(d){ return (typeof d==="string")?true:(d.train!==false); }
+
+// 拍照頁按鈕與浮水印用的是「顯示名稱」
+function curItems(){ return itemDefs().map(defName); }
+// 訓練樣本存的是「訓練名稱」，跨業主才對得起來
+function keyOf(display){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defName(ds[i])===display) return defKey(ds[i]);
+  return display;
+}
+// 辨識結果是訓練名稱，要換回目前業主表格上的用字才能寫進浮水印
+function displayOf(key){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defKey(ds[i])===key) return defName(ds[i]);
+  return null;
+}
+function trainableItem(display){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defName(ds[i])===display) return defTrain(ds[i]);
+  return true;
+}
+// 比對樣本標籤時要看所有業主的訓練名稱，否則別家的會被誤判成打錯字
 function allItems(){
   var out=[];
-  OWNERS.forEach(function(o){ o.items.forEach(function(i){ if(out.indexOf(i)<0) out.push(i); }); });
+  OWNERS.forEach(function(o){ o.items.forEach(function(d){
+    var k=defKey(d); if(out.indexOf(k)<0) out.push(k);
+  }); });
   return out;
 }
 
@@ -1144,12 +1197,13 @@ function shoot(){
 
   classify(cv).then(function(hit){
     var overrode=false;
-    if(hit&&hit.prob>=0.7&&curItems().indexOf(hit.label)>=0&&hit.label!==curItem){
-      curItem=hit.label; overrode=true;
+    var asShown=hit?displayOf(hit.label):null;
+    if(hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
+      curItem=asShown; overrode=true;
     }
     if(hit){
       $("aiChip").classList.remove("hidden");
-      $("aiChip").textContent="AI："+hit.label+" "+Math.round(hit.prob*100)+"%";
+      $("aiChip").textContent="AI："+(asShown||hit.label)+" "+Math.round(hit.prob*100)+"%";
     }
     var when=new Date();
     stamp(cv,curItem,when);
@@ -1160,7 +1214,9 @@ function shoot(){
     }).then(function(){
       // AI 改過的那張不留做訓練資料：那是模型自己的猜測，拿回去訓練只會把錯誤放大
       if(overrode) return;
-      return keepSample(clean,curItem,when);
+      // 「其他」底下什麼都有，收進去只會讓模型到處誤判
+      if(!trainableItem(curItem)) return;
+      return keepSample(clean,keyOf(curItem),when);
     });
   }).then(function(){
     return refreshPhotos();
@@ -1710,7 +1766,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12g";
+var APP_VERSION="2026-09-12h";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1820,6 +1876,7 @@ window.__pv={
   _keepSample:keepSample, _clearSamples:sampClear, _kvGet:kvGet, classify:classify,
   _shared:shAll, _shClear:shClear, _push:pushSamples, _pull:pullShared,
   get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
+  _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
