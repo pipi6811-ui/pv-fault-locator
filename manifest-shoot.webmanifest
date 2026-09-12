@@ -1,0 +1,17 @@
+{
+  "name": "維運拍照 · 自動檢查項目",
+  "short_name": "維運拍照",
+  "description": "太陽光電維運現場拍照：自動帶浮水印、自動推進檢查項目",
+  "lang": "zh-Hant",
+  "start_url": "./photo-checklist.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E7E4DC",
+  "theme_color": "#14181B",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
