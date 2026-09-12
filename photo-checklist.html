@@ -332,24 +332,38 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>AI 自動選項目（自訓模型）</h2></div>
+      <div class="sec-head"><span class="num">3</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
       <div class="sec-body">
-        <div class="field">
-          <label>Teachable Machine 模型網址</label>
-          <input id="sModel" type="url" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/">
-          <p class="hint">
-            留空＝手動點按鈕選項目。<br>
-            填入後：拍照瞬間辨識畫面，自動把浮水印換成辨識到的項目，連點都不用點。
-          </p>
-        </div>
+        <p class="hint" style="margin-top:0">
+          你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
+          收夠了按「開始訓練」，之後拍照就會自動跳到對的項目。
+          <b>訓練都在手機上做，照片不會外傳。</b>
+        </p>
+        <div class="note" id="sampState"><b>訓練樣本：</b>計算中…</div>
         <div class="btnrow">
-          <button class="b1" id="btnLoadModel" type="button">載入模型</button>
-          <button class="b2" id="btnUnloadModel" type="button">停用</button>
+          <button class="b1" id="btnTrain" type="button">開始訓練</button>
+          <button class="b2 b-sm" id="btnRollback" type="button">回上一版</button>
+          <button class="b2 b-sm b-danger" id="btnWipeSamples" type="button">清空訓練資料</button>
         </div>
+        <div class="note hidden" id="trainState"></div>
         <div class="note" id="modelState"><b>狀態：</b>未載入（手動選項目）</div>
-        <div class="note warn">
-          <b>模型的分類名稱要和上面的檢查項目文字一模一樣</b>，才對得起來。
-        </div>
+
+        <details style="margin-top:12px">
+          <summary style="font-size:13px;font-weight:700;cursor:pointer">進階：改用 Teachable Machine 模型</summary>
+          <div class="field" style="margin-top:10px">
+            <label>Teachable Machine 模型網址</label>
+            <input id="sModel" type="url" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/">
+            <p class="hint">
+              只有在還沒訓練過、或你想改用電腦訓練的模型時才需要。
+              <b>模型的分類名稱要和檢查項目文字一模一樣。</b>
+              已經訓練過的話，這裡填了也不會生效——手機上訓練的優先。
+            </p>
+          </div>
+          <div class="btnrow">
+            <button class="b2 b-sm" id="btnLoadModel" type="button">載入模型</button>
+            <button class="b2 b-sm" id="btnUnloadModel" type="button">停用</button>
+          </div>
+        </details>
       </div>
     </section>
 
@@ -382,14 +396,20 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">6</span><h2>怎麼訓練自己的模型</h2></div>
+      <div class="sec-head"><span class="num">6</span><h2>怎麼讓辨識變準</h2></div>
       <div class="sec-body">
         <div class="note">
-          <b>1.</b> 電腦開 <code>teachablemachine.withgoogle.com</code> → Get Started → <b>Image Project</b> → Standard image model<br><br>
-          <b>2.</b> 每個標的物開一個 Class，名稱打<b>中文</b>，和檢查項目文字一致，把檔案庫的照片拖進去。<br>
-          <span class="hint" style="margin:4px 0 0">每類至少 50 張，多角度、晴天陰天都要有。</span><br><br>
-          <b>3.</b> 按 <b>Train Model</b>，跑完後 <b>Export Model</b> → <b>TensorFlow.js</b> → <b>Upload my model</b> → 複製網址<br><br>
-          <b>4.</b> 貼到上面 → 載入模型。
+          <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
+          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 3 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
+          <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
+          <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>。
+        </div>
+        <div class="note warn">
+          <b>兩件事會讓它學歪：</b><br>
+          · 換了標的物卻忘記點按鈕——那幾張會被貼上錯的項目拿去學。<br>
+          · 只在同一個案場拍——它可能學成「認這個屋頂」而不是「認太陽能板」。
+          多跑幾個案場再訓練會穩很多。<br>
+          <span class="hint" style="margin:6px 0 0">AI 自己改過項目的那張不會拿去學，避免它把自己的猜測當成標準答案，越練越偏。</span>
         </div>
       </div>
     </section>
@@ -402,6 +422,8 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js"></script>
 <script>
 (function(){
 "use strict";
@@ -433,19 +455,30 @@ var DB=null;
 function dbOpen(){
   return new Promise(function(res,rej){
     if(DB) return res(DB);
-    var rq=indexedDB.open("pvshoot",1);
+    // v2 新增：samples（邊拍邊學的訓練樣本）、kv（訓練好的辨識資料與設定）
+    var rq=indexedDB.open("pvshoot",2);
     rq.onupgradeneeded=function(){
       var db=rq.result;
       if(!db.objectStoreNames.contains("photos"))
         db.createObjectStore("photos",{keyPath:"id",autoIncrement:true});
+      if(!db.objectStoreNames.contains("samples"))
+        db.createObjectStore("samples",{keyPath:"id",autoIncrement:true});
+      if(!db.objectStoreNames.contains("kv"))
+        db.createObjectStore("kv",{keyPath:"k"});
     };
     rq.onsuccess=function(){ DB=rq.result; res(DB); };
     rq.onerror=function(){ rej(rq.error); };
   });
 }
-function tx(mode){
-  return dbOpen().then(function(db){ return db.transaction("photos",mode).objectStore("photos"); });
+function store(name,mode){
+  return dbOpen().then(function(db){ return db.transaction(name,mode).objectStore(name); });
 }
+function req(r){
+  return new Promise(function(res,rej){
+    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+  });
+}
+function tx(mode){ return store("photos",mode); }
 function dbAdd(rec){
   return tx("readwrite").then(function(st){
     return new Promise(function(res,rej){
@@ -480,6 +513,21 @@ function dbDel(ids){
   });
 }
 
+/* 訓練樣本與訓練成果分開存：刪照片不會刪掉學過的東西 */
+function sampAdd(rec){ return store("samples","readwrite").then(function(st){ return req(st.add(rec)); }); }
+function sampAll(){
+  return store("samples","readonly").then(function(st){ return req(st.getAll()); })
+    .then(function(a){ return (a||[]).sort(function(x,y){return x.id-y.id;}); });
+}
+function sampPut(rec){ return store("samples","readwrite").then(function(st){ return req(st.put(rec)); }); }
+function sampClear(){ return store("samples","readwrite").then(function(st){ return req(st.clear()); }); }
+function kvGet(k){
+  return store("kv","readonly").then(function(st){ return req(st.get(k)); })
+    .then(function(r){ return r?r.v:null; });
+}
+function kvSet(k,v){ return store("kv","readwrite").then(function(st){ return req(st.put({k:k,v:v})); }); }
+function kvDel(k){ return store("kv","readwrite").then(function(st){ return req(st.delete(k)); }); }
+
 /* ═══════════ 狀態 ═══════════ */
 var curItem=S.items[0]||"";
 var photos=[];        // {id,item,area,work,blob,time,uploaded}
@@ -509,7 +557,7 @@ function renderItemBtns(){
     var c=countOf(name); n.textContent=c?c:"";
     b.appendChild(t); b.appendChild(n);
     b.addEventListener("click",function(){
-      curItem=name; renderNow(); renderItemBtns();
+      curItem=name; sinceTap=0; renderNow(); renderItemBtns();
     });
     box.appendChild(b);
   });
@@ -616,13 +664,233 @@ function loadModel(url){
     return false;
   });
 }
+/* ── 邊拍邊學 ──
+   拍照時把畫面的特徵向量留下來，配上你當下選的項目，就是一筆訓練資料。
+   訓練用 KNN：把樣本的特徵存起來，辨識時比對最接近的幾筆，不需要梯度訓練，
+   加樣本即時生效，也不會像重訓那樣把以前學過的洗掉。 */
+var FEAT=null, knn=null, knnMeta=null, featLoading=null;
+
+// 中央正方形裁切再縮到 224，訓練與辨識都走這個函式，前處理才會一致
+function to224(src){
+  var c=document.createElement("canvas"); c.width=224; c.height=224;
+  var w=src.width||src.videoWidth, h=src.height||src.videoHeight;
+  var s=Math.min(w,h), sx=Math.floor((w-s)/2), sy=Math.floor((h-s)/2);
+  c.getContext("2d").drawImage(src,sx,sy,s,s,0,0,224,224);
+  return c;
+}
+function libsReady(){ return typeof tf!=="undefined"&&typeof mobilenet!=="undefined"&&typeof knnClassifier!=="undefined"; }
+
+// MobileNet 權重約 16MB，只在真的要用時才下載，之後由 Service Worker 快取
+function loadFeat(){
+  if(FEAT) return Promise.resolve(FEAT);
+  if(featLoading) return featLoading;
+  if(!libsReady()) return Promise.reject(htmlErr("辨識程式庫沒下載到（可能離線）。第一次訓練需要網路，之後就能離線辨識。"));
+  featLoading=mobilenet.load({version:2,alpha:1.0}).then(function(m){
+    FEAT=m; featLoading=null; return m;
+  }).catch(function(e){ featLoading=null; throw e; });
+  return featLoading;
+}
+// 回傳 Float32Array；呼叫端不必管 tensor 釋放
+function embed(src){
+  return loadFeat().then(function(m){
+    var t=m.infer(to224(src),true);
+    var v=t.dataSync().slice(); t.dispose();
+    return v;
+  });
+}
+
+function labelsOf(ds){ return Object.keys(ds||{}); }
+// 存進 IndexedDB 要用純陣列，tensor 不能直接存
+function dsToPlain(ds){
+  var out={};
+  labelsOf(ds).forEach(function(l){ out[l]={shape:ds[l].shape,data:Array.from(ds[l].dataSync())}; });
+  return out;
+}
+function dsFromPlain(p){
+  var out={};
+  Object.keys(p||{}).forEach(function(l){
+    out[l]=tf.tensor2d(Float32Array.from(p[l].data),p[l].shape);
+  });
+  return out;
+}
+// 依樣本重建一個 KNN；cap 限制每類最多取幾筆，避免某一類樣本太多把投票蓋掉
+function buildKnn(samples,cap){
+  var byLabel={};
+  samples.forEach(function(s){
+    if(!s.emb||!s.label) return;
+    (byLabel[s.label]=byLabel[s.label]||[]).push(s);
+  });
+  var ds={},counts={};
+  Object.keys(byLabel).forEach(function(l){
+    var arr=byLabel[l];
+    if(cap&&arr.length>cap) arr=arr.slice(arr.length-cap);   // 留最新的
+    var dim=arr[0].emb.length, buf=new Float32Array(arr.length*dim);
+    arr.forEach(function(s,i){ buf.set(s.emb,i*dim); });
+    ds[l]=tf.tensor2d(buf,[arr.length,dim]);
+    counts[l]=arr.length;
+  });
+  var c=knnClassifier.create();
+  if(Object.keys(ds).length) c.setClassifierDataset(ds);
+  return {clf:c,counts:counts};
+}
+function pickK(counts){
+  var min=Infinity;
+  Object.keys(counts).forEach(function(l){ if(counts[l]<min) min=counts[l]; });
+  if(!isFinite(min)) return 1;
+  return Math.max(1,Math.min(10,min));
+}
+
+function loadKnn(){
+  return kvGet("knn").then(function(saved){
+    if(!saved||!saved.ds||!libsReady()) return false;
+    try{
+      knn=knnClassifier.create();
+      knn.setClassifierDataset(dsFromPlain(saved.ds));
+      knnMeta=saved.meta||{};
+      return true;
+    }catch(e){ knn=null; knnMeta=null; return false; }
+  }).catch(function(){ return false; });
+}
+
 function classify(cv){
+  if(knn) return knnPredict(cv);
   if(!model) return Promise.resolve(null);
   return model.predict(cv).then(function(p){
     if(!p||!p.length) return null;
     p.sort(function(a,b){return b.probability-a.probability;});
     return {label:p[0].className,prob:p[0].probability};
   }).catch(function(){ return null; });
+}
+function knnPredict(cv){
+  return embed(cv).then(function(v){
+    var t=tf.tensor2d(v,[1,v.length]);
+    return knn.predictClass(t,(knnMeta&&knnMeta.k)||3).then(function(r){
+      t.dispose();
+      var conf=r.confidences?r.confidences[r.label]:0;
+      return {label:r.label,prob:conf};
+    }).catch(function(e){ t.dispose(); throw e; });
+  }).catch(function(){ return null; });
+}
+/* 樣本只留 224×224 縮圖（約 8KB），不留原圖。
+   特徵向量等到 MobileNet 有載入時才算——離線拍的照片之後照樣能補上。 */
+var sinceTap=0;
+function keepSample(c224,label,when){
+  if(!label) return Promise.resolve();
+  var rec={label:label,time:when.toISOString(),sinceTap:sinceTap,emb:null};
+  sinceTap++;
+  return new Promise(function(res){ c224.toBlob(res,"image/jpeg",0.8); }).then(function(thumb){
+    if(!thumb) return;
+    rec.thumb=thumb;
+    if(!FEAT) return sampAdd(rec);
+    return embed(c224).then(function(v){ rec.emb=v; return sampAdd(rec); })
+      .catch(function(){ return sampAdd(rec); });
+  }).catch(function(){});
+}
+function blobToImg(blob){
+  if(typeof createImageBitmap==="function") return createImageBitmap(blob);
+  return new Promise(function(res,rej){
+    var u=URL.createObjectURL(blob), im=new Image();
+    im.onload=function(){ URL.revokeObjectURL(u); res(im); };
+    im.onerror=function(){ URL.revokeObjectURL(u); rej(new Error("縮圖讀取失敗")); };
+    im.src=u;
+  });
+}
+// 補算還沒有特徵向量的樣本，onStep 回報進度
+function fillEmbeddings(samples,onStep){
+  var todo=samples.filter(function(s){ return !s.emb&&s.thumb; });
+  if(!todo.length) return Promise.resolve(0);
+  return loadFeat().then(function(){
+    var i=0;
+    return todo.reduce(function(chain,s){
+      return chain.then(function(){
+        return blobToImg(s.thumb).then(function(im){
+          var c=document.createElement("canvas"); c.width=224; c.height=224;
+          c.getContext("2d").drawImage(im,0,0,224,224);
+          if(im.close) im.close();
+          var t=FEAT.infer(c,true);
+          s.emb=t.dataSync().slice(); t.dispose();
+          return sampPut(s);
+        }).catch(function(){}).then(function(){
+          i++; if(onStep&&i%10===0) onStep(i,todo.length);
+        });
+      });
+    },Promise.resolve()).then(function(){ return todo.length; });
+  });
+}
+var PER_CLASS_CAP=300;
+
+// 每類抽 20% 當考卷，用剩下的 80% 建模型去考，答對率才是真的辨識率。
+// 樣本太少的類別不抽考卷（抽走就沒得學了），但會在報告裡標出來。
+function holdoutEval(samples){
+  var byLabel={};
+  samples.forEach(function(s){ if(s.emb&&s.label) (byLabel[s.label]=byLabel[s.label]||[]).push(s); });
+  var train=[],test=[],thin=[];
+  Object.keys(byLabel).forEach(function(l){
+    var arr=byLabel[l];
+    if(arr.length<5){ thin.push(l+" "+arr.length+" 張"); train=train.concat(arr); return; }
+    var n=Math.max(1,Math.round(arr.length*0.2));
+    // 取尾端當考卷：最接近現在的拍攝條件，比隨機抽更接近實際使用
+    test=test.concat(arr.slice(arr.length-n));
+    train=train.concat(arr.slice(0,arr.length-n));
+  });
+  if(!test.length||Object.keys(byLabel).length<2)
+    return Promise.resolve({skipped:true,thin:thin});
+
+  var built=buildKnn(train,PER_CLASS_CAP), k=pickK(built.counts);
+  var right=0, per={};
+  return test.reduce(function(chain,s){
+    return chain.then(function(){
+      var t=tf.tensor2d(s.emb,[1,s.emb.length]);
+      return built.clf.predictClass(t,k).then(function(r){
+        t.dispose();
+        per[s.label]=per[s.label]||{n:0,ok:0};
+        per[s.label].n++;
+        if(r.label===s.label){ right++; per[s.label].ok++; }
+      }).catch(function(){ t.dispose(); });
+    });
+  },Promise.resolve()).then(function(){
+    built.clf.dispose();
+    return {skipped:false,acc:right/test.length,n:test.length,per:per,thin:thin};
+  });
+}
+
+function trainKnn(onNote){
+  var say=onNote||function(){};
+  var all=null;
+  say("讀取樣本…");
+  return sampAll().then(function(a){
+    all=a;
+    if(!all.length) throw htmlErr("還沒有訓練樣本。先去拍幾張照片，每個項目都拍到，再回來訓練。");
+    say("計算特徵（第一次要下載辨識模型，約 16MB）…");
+    return fillEmbeddings(all,function(i,n){ say("計算特徵 "+i+" / "+n+"…"); });
+  }).then(function(){
+    return sampAll();
+  }).then(function(a){
+    all=a.filter(function(s){ return s.emb; });
+    var labels={}; all.forEach(function(s){ labels[s.label]=1; });
+    if(Object.keys(labels).length<2)
+      throw htmlErr("至少要有 <b>2 個不同項目</b>的樣本才能訓練，不然沒有東西可以分辨。");
+    say("評估辨識率…");
+    return holdoutEval(all);
+  }).then(function(ev){
+    say("建立模型…");
+    var built=buildKnn(all,PER_CLASS_CAP);
+    var k=pickK(built.counts);
+    var plain=dsToPlain(built.clf.getClassifierDataset());
+    built.clf.dispose();
+    return kvGet("knn").then(function(prev){
+      // 先留上一版再覆蓋，訓練壞了才回得去
+      return (prev?kvSet("knn_prev",prev):Promise.resolve()).then(function(){
+        var meta={k:k,counts:built.counts,trained:new Date().toISOString(),
+          acc:ev.skipped?null:ev.acc,evalN:ev.skipped?0:ev.n};
+        return kvSet("knn",{ds:plain,meta:meta});
+      });
+    }).then(function(){
+      return loadKnn();
+    }).then(function(){
+      return {counts:built.counts,k:k,ev:ev};
+    });
+  });
 }
 function errText(e){ return (e&&e.message)?e.message:String(e); }
 
@@ -639,8 +907,14 @@ function shoot(){
   cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
   cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
 
+  // 浮水印還沒蓋上去，這時的畫面才適合留做訓練資料
+  var clean=to224(cv);
+
   classify(cv).then(function(hit){
-    if(hit&&hit.prob>=0.7&&S.items.indexOf(hit.label)>=0) curItem=hit.label;
+    var overrode=false;
+    if(hit&&hit.prob>=0.7&&S.items.indexOf(hit.label)>=0&&hit.label!==curItem){
+      curItem=hit.label; overrode=true;
+    }
     if(hit){
       $("aiChip").classList.remove("hidden");
       $("aiChip").textContent="AI："+hit.label+" "+Math.round(hit.prob*100)+"%";
@@ -651,6 +925,10 @@ function shoot(){
       if(!blob) throw new Error("照片產生失敗");
       return dbAdd({item:curItem,area:S.area,work:S.work,blob:blob,
         time:when.toISOString(),uploaded:false});
+    }).then(function(){
+      // AI 改過的那張不留做訓練資料：那是模型自己的猜測，拿回去訓練只會把錯誤放大
+      if(overrode) return;
+      return keepSample(clean,curItem,when);
     });
   }).then(function(){
     return refreshPhotos();
@@ -1004,6 +1282,82 @@ $("btnUnloadModel").addEventListener("click",function(){
   $("aiChip").classList.add("hidden");
   setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
 });
+/* ── 邊拍邊學：設定頁 ── */
+function fmtCounts(c){
+  var ks=Object.keys(c||{});
+  if(!ks.length) return "（還沒有）";
+  ks.sort(function(a,b){ return c[b]-c[a]; });
+  return ks.map(function(l){ return esc(l)+" "+c[l]; }).join("、");
+}
+function renderSampState(){
+  return sampAll().then(function(a){
+    var c={}; a.forEach(function(s){ c[s.label]=(c[s.label]||0)+1; });
+    var enough=Object.keys(c).filter(function(l){ return c[l]>=30; }).length;
+    var body="<b>訓練樣本：</b>共 "+a.length+" 張　"+fmtCounts(c);
+    if(knnMeta&&knnMeta.trained){
+      body+="<br><b>目前使用：</b>手機上訓練的模型（"+
+        knnMeta.trained.slice(0,10)+"）"+
+        (knnMeta.acc!=null?"，實測辨識率 "+Math.round(knnMeta.acc*100)+"%":"");
+    }
+    var cls=a.length&&enough>=2?"ok":null;
+    if(!a.length) body+="<br>去拍照吧，拍了就會自動累積。";
+    else if(enough<2) body+="<br>建議每個項目都累積到 30 張以上再訓練，現在有 "+enough+" 個項目達標。";
+    setNote($("sampState"),body,cls);
+    return a.length;
+  }).catch(function(){ setNote($("sampState"),"<b>訓練樣本：</b>讀取失敗","warn"); });
+}
+var training=false;
+$("btnTrain").addEventListener("click",function(){
+  if(training) return;
+  training=true; $("btnTrain").disabled=true;
+  setNote($("trainState"),"<b>準備中…</b>");
+  trainKnn(function(msg){ setNote($("trainState"),"<b>"+esc(msg)+"</b>"); })
+    .then(function(r){
+      var ev=r.ev, html="<b>訓練完成 ✓</b>　"+fmtCounts(r.counts);
+      if(ev.skipped){
+        html+="<br>樣本還太少，沒辦法留出考卷估辨識率。多拍一些再訓練一次會比較有把握。";
+      }else{
+        var pct=Math.round(ev.acc*100);
+        html+="<br><b>實測辨識率 "+pct+"%</b>（拿 "+ev.n+" 張沒學過的照片考出來的）";
+        var rows=Object.keys(ev.per).map(function(l){
+          var p=ev.per[l]; return esc(l)+" "+p.ok+"/"+p.n;
+        });
+        if(rows.length) html+="<br><span style=\"font-size:12px\">各項目："+rows.join("、")+"</span>";
+        if(pct<70) html+="<br><b>這個準確度還不夠</b>，拍照時仍請自己點項目，別依賴它。";
+      }
+      if(ev.thin&&ev.thin.length)
+        html+="<br><span style=\"font-size:12px\">樣本過少沒列入評估："+esc(ev.thin.join("、"))+"</span>";
+      setNote($("trainState"),html,ev.skipped||ev.acc>=0.7?"ok":"warn");
+      $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+      setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓","ok");
+      return renderSampState();
+    })
+    .catch(function(err){
+      setNote($("trainState"),"<b>訓練失敗：</b>"+errHtml(err),"bad");
+    })
+    .then(function(){ training=false; $("btnTrain").disabled=false; });
+});
+$("btnRollback").addEventListener("click",function(){
+  kvGet("knn_prev").then(function(prev){
+    if(!prev){ setNote($("trainState"),"<b>沒有上一版可以回。</b>","warn"); return; }
+    return kvSet("knn",prev).then(function(){ return kvDel("knn_prev"); })
+      .then(loadKnn).then(function(){
+        setNote($("trainState"),"<b>已回到上一版 ✓</b>"+
+          (prev.meta&&prev.meta.trained?"（"+prev.meta.trained.slice(0,10)+" 訓練的）":""),"ok");
+        return renderSampState();
+      });
+  }).catch(function(err){ setNote($("trainState"),"<b>回復失敗：</b>"+errHtml(err),"bad"); });
+});
+$("btnWipeSamples").addEventListener("click",function(){
+  if(!confirm("清空全部訓練樣本？\n\n已經訓練好的辨識能力會一起失效，要重新累積。\n照片本身不受影響。")) return;
+  Promise.all([sampClear(),kvDel("knn"),kvDel("knn_prev")]).then(function(){
+    knn=null; knnMeta=null;
+    $("aiChip").classList.add("hidden");
+    setNote($("trainState"),"<b>已清空。</b>再拍照就會重新開始累積。","ok");
+    setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
+    return renderSampState();
+  });
+});
 $("btnRefreshQuota").addEventListener("click",updateQuota);
 $("btnWipe").addEventListener("click",function(){
   if(!photos.length){ alert("沒有照片。"); return; }
@@ -1051,7 +1405,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12c";
+var APP_VERSION="2026-09-12d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1141,12 +1495,24 @@ refreshPhotos();
 initPersist();
 initSW();
 startCam();
-if(S.model) loadModel(S.model);
+
+// 手機上訓練過的模型優先；沒有才回頭用 Teachable Machine 網址
+loadKnn().then(function(has){
+  if(has){
+    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+    setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓"+
+      (knnMeta&&knnMeta.acc!=null?"（實測辨識率 "+Math.round(knnMeta.acc*100)+"%）":""),"ok");
+  }else if(S.model) loadModel(S.model);
+  return renderSampState();
+});
 
 window.__pv={
   // 自動化測試用：把固定的上傳目的地指向測試伺服器
   _setNasUrl:function(u){ NAS_URL=u; },
   get nasUrl(){ return NAS_URL; }, get nasPath(){ return nasPath(); },
+  get knnMeta(){ return knnMeta; }, get hasKnn(){ return !!knn; },
+  samples:sampAll, train:trainKnn, _to224:to224,
+  _keepSample:keepSample, _clearSamples:sampClear, _kvGet:kvGet, classify:classify,
   _safeFolder:safeFolder,
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
