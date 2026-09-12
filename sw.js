@@ -3,7 +3,7 @@
    NAS 上傳一律走網路，永不快取。 */
 "use strict";
 
-var VERSION = "2026-09-12d";
+var VERSION = "2026-09-12e";
 var SHELL = "pvshoot-shell-" + VERSION;
 var RUNTIME = "pvshoot-runtime-" + VERSION;
 
@@ -93,7 +93,11 @@ self.addEventListener("fetch",function(e){
   var url;
   try{ url=new URL(req.url); }catch(err){ return; }
   if(url.protocol!=="http:"&&url.protocol!=="https:") return;
+  // NAS 的 API 一律不碰。直連 DSM 是 /webapi/；走同源轉發程式時則是
+  // proxy.php?_cgi=…，長得像一般同源網頁，漏掉會把查檔案、下載樣本的結果
+  // 快取起來，下次讀到的是上一次的狀態。
   if(url.pathname.indexOf("/webapi/")>=0) return;
+  if(url.searchParams.has("_cgi")||/\.php$/i.test(url.pathname)) return;
 
   if(url.origin===self.location.origin){
     if(req.mode==="navigate"||/\.html$/.test(url.pathname)) e.respondWith(networkFirst(req,4000));

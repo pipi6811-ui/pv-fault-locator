@@ -286,6 +286,14 @@
           <input id="sArea" type="text" placeholder="例：新光國小- 屋頂型">
         </div>
         <div class="field">
+          <label>你的名字</label>
+          <input id="sWho" type="text" placeholder="例：陳小明">
+          <p class="hint">
+            用來標記訓練樣本是誰拍的。多人共同訓練時，才看得出誰的資料讓辨識變差。
+            不會出現在照片浮水印上。
+          </p>
+        </div>
+        <div class="field">
           <label>維運內容</label>
           <input id="sWork" type="text" placeholder="例：Q3定檢">
         </div>
@@ -337,9 +345,17 @@
         <p class="hint" style="margin-top:0">
           你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
           收夠了按「開始訓練」，之後拍照就會自動跳到對的項目。
-          <b>訓練都在手機上做，照片不會外傳。</b>
+          <b>訓練在手機上做，上傳時只送特徵數值，照片不會外傳。</b>
         </p>
         <div class="note" id="sampState"><b>訓練樣本：</b>計算中…</div>
+        <div class="field">
+          <label>訓練時排除這些人的樣本</label>
+          <input id="sExclude" type="text" placeholder="留空＝全部採用；多人用逗號分隔">
+          <p class="hint">
+            訓練報告會列出每個人的答對率。發現誰的資料在拖後腿（通常是換標的物忘記
+            點項目按鈕），先填在這裡排除再訓練一次，不用整包砍掉。
+          </p>
+        </div>
         <div class="btnrow">
           <button class="b1" id="btnTrain" type="button">開始訓練</button>
           <button class="b2 b-sm" id="btnRollback" type="button">回上一版</button>
@@ -433,7 +449,9 @@ var $=function(id){return document.getElementById(id);};
 var SET_KEY="pvshoot_set";
 var NAS_KEY="pvshoot_nas";
 var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
-  items:["太陽能板","監控箱","支架","接線盒","電纜"],model:""};
+  items:["太陽能板","監控箱","支架","接線盒","電纜"],model:"",
+  who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
+  exclude:[]};       // 訓練時要排除哪些人的樣本
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
 var NAS=readJSON(NAS_KEY,{user:"",pass:"",remember:false});
@@ -456,7 +474,8 @@ function dbOpen(){
   return new Promise(function(res,rej){
     if(DB) return res(DB);
     // v2 新增：samples（邊拍邊學的訓練樣本）、kv（訓練好的辨識資料與設定）
-    var rq=indexedDB.open("pvshoot",2);
+    // v3 新增：shared（從 NAS 抓回來、同仁貢獻的樣本）
+    var rq=indexedDB.open("pvshoot",3);
     rq.onupgradeneeded=function(){
       var db=rq.result;
       if(!db.objectStoreNames.contains("photos"))
@@ -465,6 +484,8 @@ function dbOpen(){
         db.createObjectStore("samples",{keyPath:"id",autoIncrement:true});
       if(!db.objectStoreNames.contains("kv"))
         db.createObjectStore("kv",{keyPath:"k"});
+      if(!db.objectStoreNames.contains("shared"))
+        db.createObjectStore("shared",{keyPath:"id",autoIncrement:true});
     };
     rq.onsuccess=function(){ DB=rq.result; res(DB); };
     rq.onerror=function(){ rej(rq.error); };
@@ -521,6 +542,17 @@ function sampAll(){
 }
 function sampPut(rec){ return store("samples","readwrite").then(function(st){ return req(st.put(rec)); }); }
 function sampClear(){ return store("samples","readwrite").then(function(st){ return req(st.clear()); }); }
+function shAll(){
+  return store("shared","readonly").then(function(st){ return req(st.getAll()); })
+    .then(function(a){ return a||[]; });
+}
+function shAddMany(recs){
+  if(!recs.length) return Promise.resolve(0);
+  return store("shared","readwrite").then(function(st){
+    return Promise.all(recs.map(function(r){ return req(st.add(r)).catch(function(){}); }));
+  }).then(function(){ return recs.length; });
+}
+function shClear(){ return store("shared","readwrite").then(function(st){ return req(st.clear()); }); }
 function kvGet(k){
   return store("kv","readonly").then(function(st){ return req(st.get(k)); })
     .then(function(r){ return r?r.v:null; });
@@ -776,7 +808,8 @@ function knnPredict(cv){
 var sinceTap=0;
 function keepSample(c224,label,when){
   if(!label) return Promise.resolve();
-  var rec={label:label,time:when.toISOString(),sinceTap:sinceTap,emb:null};
+  var rec={label:label,time:when.toISOString(),sinceTap:sinceTap,emb:null,
+    who:whoName(),synced:false};
   sinceTap++;
   return new Promise(function(res){ c224.toBlob(res,"image/jpeg",0.8); }).then(function(thumb){
     if(!thumb) return;
@@ -817,6 +850,139 @@ function fillEmbeddings(samples,onStep){
     },Promise.resolve()).then(function(){ return todo.length; });
   });
 }
+/* ── 多人共同訓練 ──
+   各自的手機把「特徵向量＋項目」打包成 JSON 丟到 NAS 的 _train，只新增不覆蓋，
+   所以幾個人同時上傳不會互相蓋掉。誰要訓練，就先把還沒合併過的檔案抓下來一起算。
+   只送特徵向量，不送照片與縮圖。 */
+var FEAT_VER="mobilenet-v2-a1.0-224";        // 特徵演算法版本，對不上就不能混用
+function trainDir(){ return NAS_ROOT+"/_train"; }
+
+function whoName(){ return safeFolder(S.who)||"未具名"; }
+
+// 版本號寫死容易跟實際 DSM 對不上，改成跟 NAS 問
+var apiVerCache=null;
+function apiVers(sid){
+  if(apiVerCache) return Promise.resolve(apiVerCache);
+  var want="SYNO.FileStation.List,SYNO.FileStation.Download,SYNO.FileStation.Upload";
+  return fetch(apiUrl("query.cgi","api=SYNO.API.Info&version=1&method=query&query="+
+      encodeURIComponent(want)+"&_sid="+encodeURIComponent(sid)))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var d=(j&&j.success&&j.data)||{};
+      var pick=function(n,dflt){
+        return (d[n]&&d[n].maxVersion)?Math.min(d[n].maxVersion,dflt):dflt;
+      };
+      apiVerCache={list:pick("SYNO.FileStation.List",2),
+        down:pick("SYNO.FileStation.Download",2),
+        up:pick("SYNO.FileStation.Upload",2)};
+      return apiVerCache;
+    })
+    .catch(function(){ apiVerCache={list:2,down:2,up:2}; return apiVerCache; });
+}
+
+function pushSamples(sid){
+  return sampAll().then(function(a){
+    var todo=a.filter(function(s){ return s.emb&&!s.synced; });
+    if(!todo.length) return {sent:0};
+    var batch={v:1,feat:FEAT_VER,who:whoName(),time:new Date().toISOString(),
+      items:todo.map(function(s){
+        return {label:s.label,emb:Array.from(s.emb),sinceTap:s.sinceTap||0,time:s.time};
+      })};
+    var name=safeFolder(whoName())+"__"+
+      new Date().toISOString().replace(/[:.]/g,"-")+"__"+
+      Math.random().toString(36).slice(2,8)+".json";
+    var blob=new Blob([JSON.stringify(batch)],{type:"application/json"});
+    return apiVers(sid).then(function(v){
+      var fd=new FormData();
+      fd.append("api","SYNO.FileStation.Upload");
+      fd.append("version",String(v.up));
+      fd.append("method","upload");
+      fd.append("path",trainDir());
+      fd.append("create_parents","true");
+      fd.append("overwrite","true");
+      fd.append("_sid",sid);
+      fd.append("file",blob,name);
+      return fetch(apiUrl("entry.cgi","_sid="+encodeURIComponent(sid)),
+        {method:"POST",body:fd});
+    }).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      // 標記已送出，下次不重複上傳
+      return todo.reduce(function(c,s){
+        return c.then(function(){ s.synced=true; return sampPut(s); });
+      },Promise.resolve()).then(function(){ return {sent:todo.length}; });
+    });
+  });
+}
+
+function listBatches(sid){
+  return apiVers(sid).then(function(v){
+    return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.List&version="+v.list+
+      "&method=list&folder_path="+encodeURIComponent(trainDir())+
+      "&_sid="+encodeURIComponent(sid)));
+  }).then(function(r){ return r.json(); })
+    .then(function(j){
+      // 資料夾還不存在＝還沒有人上傳過，不是錯誤
+      if(!j.success) return [];
+      return ((j.data&&j.data.files)||[]).filter(function(f){
+        return !f.isdir&&/\.json$/i.test(f.name||"");
+      });
+    }).catch(function(){ return []; });
+}
+
+function fetchBatch(sid,path){
+  return apiVers(sid).then(function(v){
+    return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.Download&version="+v.down+
+      "&method=download&mode=download&path="+encodeURIComponent(path)+
+      "&_sid="+encodeURIComponent(sid)));
+  }).then(function(r){
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return r.text();
+  }).then(function(t){ return JSON.parse(t); });
+}
+
+/* 只抓沒合併過的檔案。回傳合併結果與被拒絕的原因，讓使用者看得到問題。 */
+function pullShared(sid,onNote){
+  var say=onNote||function(){};
+  var merged=null, mine=whoName();
+  return kvGet("merged").then(function(m){
+    merged=m||[];
+    say("查看 NAS 上的共用樣本…");
+    return listBatches(sid);
+  }).then(function(files){
+    var todo=files.filter(function(f){ return merged.indexOf(f.name)<0; });
+    if(!todo.length) return {added:0,files:0,skipped:[],people:{}};
+    var added=0, skipped=[], people={};
+    return todo.reduce(function(chain,f,i){
+      return chain.then(function(){
+        say("下載共用樣本 "+(i+1)+" / "+todo.length+"…");
+        return fetchBatch(sid,f.path).then(function(b){
+          if(!b||b.feat!==FEAT_VER){
+            skipped.push(f.name+"（特徵版本不符）"); return;
+          }
+          var who=safeFolder(b.who)||"未具名";
+          // 自己上傳的不用再收回來，本機已經有了
+          if(who===mine){ merged.push(f.name); return; }
+          var recs=(b.items||[]).filter(function(it){ return it&&it.label&&it.emb; })
+            .map(function(it){
+              return {who:who,label:it.label,emb:Float32Array.from(it.emb),
+                sinceTap:it.sinceTap||0,time:it.time,file:f.name};
+            });
+          return shAddMany(recs).then(function(n){
+            added+=n; people[who]=(people[who]||0)+n; merged.push(f.name);
+          });
+        }).catch(function(e){ skipped.push(f.name+"（"+errText(e)+"）"); });
+      });
+    },Promise.resolve()).then(function(){
+      return kvSet("merged",merged).then(function(){
+        return {added:added,files:todo.length,skipped:skipped,people:people};
+      });
+    });
+  }).catch(function(){ return {added:0,files:0,skipped:[],people:{}}; });
+}
+
 var PER_CLASS_CAP=300;
 
 // 每類抽 20% 當考卷，用剩下的 80% 建模型去考，答對率才是真的辨識率。
@@ -837,58 +1003,77 @@ function holdoutEval(samples){
     return Promise.resolve({skipped:true,thin:thin});
 
   var built=buildKnn(train,PER_CLASS_CAP), k=pickK(built.counts);
-  var right=0, per={};
+  var right=0, per={}, byWho={};
   return test.reduce(function(chain,s){
     return chain.then(function(){
       var t=tf.tensor2d(s.emb,[1,s.emb.length]);
       return built.clf.predictClass(t,k).then(function(r){
         t.dispose();
+        var w=s.who||"未具名";
         per[s.label]=per[s.label]||{n:0,ok:0};
-        per[s.label].n++;
-        if(r.label===s.label){ right++; per[s.label].ok++; }
+        byWho[w]=byWho[w]||{n:0,ok:0};
+        per[s.label].n++; byWho[w].n++;
+        if(r.label===s.label){ right++; per[s.label].ok++; byWho[w].ok++; }
       }).catch(function(){ t.dispose(); });
     });
   },Promise.resolve()).then(function(){
     built.clf.dispose();
-    return {skipped:false,acc:right/test.length,n:test.length,per:per,thin:thin};
+    return {skipped:false,acc:right/test.length,n:test.length,
+      per:per,byWho:byWho,thin:thin};
   });
 }
 
 function trainKnn(onNote){
   var say=onNote||function(){};
-  var all=null;
+  var all=null, pull=null;
   say("讀取樣本…");
   return sampAll().then(function(a){
-    all=a;
-    if(!all.length) throw htmlErr("還沒有訓練樣本。先去拍幾張照片，每個項目都拍到，再回來訓練。");
+    if(!a.length) return 0;
     say("計算特徵（第一次要下載辨識模型，約 16MB）…");
-    return fillEmbeddings(all,function(i,n){ say("計算特徵 "+i+" / "+n+"…"); });
+    return fillEmbeddings(a,function(i,n){ say("計算特徵 "+i+" / "+n+"…"); });
   }).then(function(){
-    return sampAll();
-  }).then(function(a){
-    all=a.filter(function(s){ return s.emb; });
+    // 有帳號又有網路就順便把同仁的樣本抓下來一起練；抓不到不影響訓練
+    if(!NAS.user||!NAS.pass||navigator.onLine===false) return null;
+    return synoLogin().then(function(sid){
+      return pullShared(sid,say).then(function(r){
+        pull=r; return synoLogout(sid);
+      });
+    }).catch(function(){ return null; });
+  }).then(function(){
+    return Promise.all([sampAll(),shAll()]);
+  }).then(function(both){
+    var ex=S.exclude||[];
+    all=both[0].concat(both[1]).filter(function(s){
+      return s.emb&&s.label&&ex.indexOf(s.who||"未具名")<0;
+    });
+    if(!all.length)
+      throw htmlErr("還沒有訓練樣本。先去拍幾張照片，每個項目都拍到，再回來訓練。");
     var labels={}; all.forEach(function(s){ labels[s.label]=1; });
     if(Object.keys(labels).length<2)
       throw htmlErr("至少要有 <b>2 個不同項目</b>的樣本才能訓練，不然沒有東西可以分辨。");
+    // 有人把項目名稱打得不一樣，會被當成不同類別，要講出來
+    var unknown=Object.keys(labels).filter(function(l){ return S.items.indexOf(l)<0; });
     say("評估辨識率…");
-    return holdoutEval(all);
+    return holdoutEval(all).then(function(ev){ ev.unknown=unknown; return ev; });
   }).then(function(ev){
     say("建立模型…");
     var built=buildKnn(all,PER_CLASS_CAP);
     var k=pickK(built.counts);
     var plain=dsToPlain(built.clf.getClassifierDataset());
     built.clf.dispose();
+    var whoCount={};
+    all.forEach(function(s){ var w=s.who||"未具名"; whoCount[w]=(whoCount[w]||0)+1; });
     return kvGet("knn").then(function(prev){
       // 先留上一版再覆蓋，訓練壞了才回得去
       return (prev?kvSet("knn_prev",prev):Promise.resolve()).then(function(){
         var meta={k:k,counts:built.counts,trained:new Date().toISOString(),
-          acc:ev.skipped?null:ev.acc,evalN:ev.skipped?0:ev.n};
+          acc:ev.skipped?null:ev.acc,evalN:ev.skipped?0:ev.n,who:whoCount};
         return kvSet("knn",{ds:plain,meta:meta});
       });
     }).then(function(){
       return loadKnn();
     }).then(function(){
-      return {counts:built.counts,k:k,ev:ev};
+      return {counts:built.counts,k:k,ev:ev,who:whoCount,pull:pull};
     });
   });
 }
@@ -1162,7 +1347,7 @@ function uploadSelected(){
   uploading=true; $("btnUpload").disabled=true;
   setNote($("actState"),"<b>登入 NAS…</b>");
 
-  var okN=0, failN=0, firstErr="";
+  var okN=0, failN=0, firstErr="", sentSamples=0, sampleErr=false;
   synoLogin().then(function(sid){
     var chain=Promise.resolve();
     todo.forEach(function(p,i){
@@ -1175,11 +1360,18 @@ function uploadSelected(){
         });
       });
     });
-    return chain.then(function(){ return synoLogout(sid); });
+    // 照片傳完，順手把新的訓練樣本也送上去給大家共用
+    return chain.then(function(){
+      setNote($("actState"),"<b>上傳訓練樣本…</b>");
+      return pushSamples(sid).then(function(r){ sentSamples=r.sent; })
+        .catch(function(){ sampleErr=true; });
+    }).then(function(){ return synoLogout(sid); });
   }).then(function(){
     return refreshPhotos();
   }).then(function(){
-    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+esc(nasPath())+"</code>","ok");
+    var extra=sentSamples?"，另有 "+sentSamples+" 筆訓練樣本已共用":
+      (sampleErr?"（訓練樣本沒送成功，下次上傳會再試）":"");
+    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+esc(nasPath())+"</code>"+extra,"ok");
     else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
   }).catch(function(err){
     setNote($("actState"),"<b>上傳中止：</b>"+errHtml(err),"bad");
@@ -1244,6 +1436,7 @@ function renderPathPreview(){
 }
 function fillForms(){
   $("sArea").value=S.area; $("sWork").value=S.work;
+  $("sWho").value=S.who||""; $("sExclude").value=(S.exclude||[]).join("、");
   $("sItems").value=S.items.join("\n"); $("sModel").value=S.model;
   $("nUser").value=NAS.user;
   $("nPass").value=NAS.remember?NAS.pass:"";
@@ -1254,6 +1447,7 @@ $("btnSaveSet").addEventListener("click",function(){
   var items=$("sItems").value.split("\n").map(function(x){return x.trim();}).filter(Boolean);
   if(!items.length){ alert("至少要有一個檢查項目。"); return; }
   S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim(); S.items=items;
+  S.who=$("sWho").value.trim();
   writeJSON(SET_KEY,S);
   if(items.indexOf(curItem)<0) curItem=items[0];
   renderNow(); renderItemBtns(); renderPathPreview();
@@ -1290,17 +1484,24 @@ function fmtCounts(c){
   return ks.map(function(l){ return esc(l)+" "+c[l]; }).join("、");
 }
 function renderSampState(){
-  return sampAll().then(function(a){
-    var c={}; a.forEach(function(s){ c[s.label]=(c[s.label]||0)+1; });
+  return Promise.all([sampAll(),shAll()]).then(function(both){
+    var a=both[0], sh=both[1];
+    var c={}; a.concat(sh).forEach(function(s){ c[s.label]=(c[s.label]||0)+1; });
     var enough=Object.keys(c).filter(function(l){ return c[l]>=30; }).length;
-    var body="<b>訓練樣本：</b>共 "+a.length+" 張　"+fmtCounts(c);
+    var body="<b>訓練樣本：</b>共 "+(a.length+sh.length)+" 張　"+fmtCounts(c);
+    if(sh.length){
+      var w={}; sh.forEach(function(s){ var k=s.who||"未具名"; w[k]=(w[k]||0)+1; });
+      body+="<br><b>其中同仁共用：</b>"+sh.length+" 張（"+fmtCounts(w)+"）";
+    }
+    var unsent=a.filter(function(s){ return s.emb&&!s.synced; }).length;
+    if(unsent) body+="<br>"+unsent+" 張還沒共用出去，下次按「上傳 NAS」時會一起送。";
     if(knnMeta&&knnMeta.trained){
       body+="<br><b>目前使用：</b>手機上訓練的模型（"+
         knnMeta.trained.slice(0,10)+"）"+
         (knnMeta.acc!=null?"，實測辨識率 "+Math.round(knnMeta.acc*100)+"%":"");
     }
-    var cls=a.length&&enough>=2?"ok":null;
-    if(!a.length) body+="<br>去拍照吧，拍了就會自動累積。";
+    var cls=(a.length+sh.length)&&enough>=2?"ok":null;
+    if(!a.length&&!sh.length) body+="<br>去拍照吧，拍了就會自動累積。";
     else if(enough<2) body+="<br>建議每個項目都累積到 30 張以上再訓練，現在有 "+enough+" 個項目達標。";
     setNote($("sampState"),body,cls);
     return a.length;
@@ -1309,6 +1510,9 @@ function renderSampState(){
 var training=false;
 $("btnTrain").addEventListener("click",function(){
   if(training) return;
+  S.exclude=$("sExclude").value.split(/[,，、]/).map(function(x){return x.trim();}).filter(Boolean);
+  S.who=$("sWho").value.trim();
+  writeJSON(SET_KEY,S);
   training=true; $("btnTrain").disabled=true;
   setNote($("trainState"),"<b>準備中…</b>");
   trainKnn(function(msg){ setNote($("trainState"),"<b>"+esc(msg)+"</b>"); })
@@ -1325,6 +1529,28 @@ $("btnTrain").addEventListener("click",function(){
         if(rows.length) html+="<br><span style=\"font-size:12px\">各項目："+rows.join("、")+"</span>";
         if(pct<70) html+="<br><b>這個準確度還不夠</b>，拍照時仍請自己點項目，別依賴它。";
       }
+      if(ev.byWho&&Object.keys(ev.byWho).length>1){
+        var ws=Object.keys(ev.byWho).map(function(w){
+          var p=ev.byWho[w], pc=p.n?Math.round(p.ok/p.n*100):0;
+          return esc(w)+" "+p.ok+"/"+p.n+"（"+pc+"%）";
+        });
+        html+="<br><b>各人答對率：</b>"+ws.join("、");
+        var bad=Object.keys(ev.byWho).filter(function(w){
+          var p=ev.byWho[w]; return p.n>=5&&p.ok/p.n<0.5;
+        });
+        if(bad.length)
+          html+="<br><b>"+esc(bad.join("、"))+" 的樣本答對率偏低</b>，"+
+            "可能是拍攝時忘記點項目按鈕。可在上面「排除這些人的樣本」填入後重新訓練比較看看。";
+      }
+      if(r.who&&Object.keys(r.who).length>1)
+        html+="<br><span style=\"font-size:12px\">參與訓練："+fmtCounts(r.who)+"</span>";
+      if(r.pull&&r.pull.added)
+        html+="<br><span style=\"font-size:12px\">本次從 NAS 併入 "+r.pull.added+" 筆共用樣本</span>";
+      if(r.pull&&r.pull.skipped&&r.pull.skipped.length)
+        html+="<br><b>有檔案沒併進來：</b>"+esc(r.pull.skipped.join("、"));
+      if(ev.unknown&&ev.unknown.length)
+        html+="<br><b>這些項目名稱和你的清單對不起來：</b>"+esc(ev.unknown.join("、"))+
+          "。同仁的檢查項目文字要一致，否則同一個東西會被當成兩類。";
       if(ev.thin&&ev.thin.length)
         html+="<br><span style=\"font-size:12px\">樣本過少沒列入評估："+esc(ev.thin.join("、"))+"</span>";
       setNote($("trainState"),html,ev.skipped||ev.acc>=0.7?"ok":"warn");
@@ -1349,8 +1575,8 @@ $("btnRollback").addEventListener("click",function(){
   }).catch(function(err){ setNote($("trainState"),"<b>回復失敗：</b>"+errHtml(err),"bad"); });
 });
 $("btnWipeSamples").addEventListener("click",function(){
-  if(!confirm("清空全部訓練樣本？\n\n已經訓練好的辨識能力會一起失效，要重新累積。\n照片本身不受影響。")) return;
-  Promise.all([sampClear(),kvDel("knn"),kvDel("knn_prev")]).then(function(){
+  if(!confirm("清空全部訓練樣本？\n\n包含從 NAS 併入的同仁樣本。已經訓練好的辨識能力會一起失效。\n照片本身與 NAS 上的共用檔案不受影響（下次訓練會重新抓回來）。")) return;
+  Promise.all([sampClear(),shClear(),kvDel("knn"),kvDel("knn_prev"),kvDel("merged")]).then(function(){
     knn=null; knnMeta=null;
     $("aiChip").classList.add("hidden");
     setNote($("trainState"),"<b>已清空。</b>再拍照就會重新開始累積。","ok");
@@ -1405,7 +1631,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12d";
+var APP_VERSION="2026-09-12e";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1513,6 +1739,8 @@ window.__pv={
   get knnMeta(){ return knnMeta; }, get hasKnn(){ return !!knn; },
   samples:sampAll, train:trainKnn, _to224:to224,
   _keepSample:keepSample, _clearSamples:sampClear, _kvGet:kvGet, classify:classify,
+  _shared:shAll, _shClear:shClear, _push:pushSamples, _pull:pullShared,
+  _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
