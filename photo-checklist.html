@@ -125,6 +125,9 @@
   .field input:focus,.field textarea:focus{outline:none;border-color:var(--ink);
     box-shadow:0 0 0 3px rgba(20,24,27,.1);}
   .hint{font-size:12px;color:var(--ink-soft);line-height:1.55;margin:6px 0 0;}
+  .fixed-path{font-family:var(--mono);font-size:13px;line-height:1.5;
+    padding:10px;border:1.5px solid var(--line);border-radius:8px;
+    background:#F2F0EA;color:var(--ink);word-break:break-all;}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;}
   .chk input{width:20px;height:20px;flex:0 0 auto;}
@@ -299,29 +302,16 @@
       <div class="sec-head"><span class="num">2</span><h2>Synology NAS 上傳</h2></div>
       <div class="sec-body">
         <div class="field">
-          <label>NAS 網址</label>
-          <input id="nHost" type="url" placeholder="https://你的網域/pvapi/proxy.php">
+          <label>照片會傳到這裡</label>
+          <div class="fixed-path" id="pathPreview">—</div>
           <p class="hint">
-            走 NAS 上的轉發程式時，填到 <code>proxy.php</code> 為止，後面不要加東西。<br>
-            直接填 DSM 位址（如 <code>https://你的NAS:5001</code>）也可以，但只有在這個頁面
-            與 DSM 同一個網域和連接埠時才不會被瀏覽器擋下。
+            上傳位置固定，不能在這裡更改，避免誤改造成照片跑掉。
+            子資料夾會依上面第 1 區的<b>維運區域</b>自動建立，換案場只要改那一欄。
           </p>
         </div>
         <div class="row2">
           <div class="field"><label>帳號</label><input id="nUser" type="text" autocomplete="username"></div>
           <div class="field"><label>密碼</label><input id="nPass" type="password" autocomplete="current-password"></div>
-        </div>
-        <div class="field">
-          <label>二階段驗證碼（沒開就留空）</label>
-          <input id="nOtp" type="text" inputmode="numeric" placeholder="6 位數字">
-        </div>
-        <div class="field">
-          <label>上傳資料夾</label>
-          <input id="nPath" type="text" placeholder="/暘勤/99 維運上傳照片">
-          <p class="hint">
-            <b>開頭要有斜線</b>，第一層是共用資料夾名稱，例如 <code>/暘勤/99 維運上傳照片</code>。
-            忘了加斜線會自動補上。不存在的子資料夾會自動建立。
-          </p>
         </div>
         <div class="field">
           <label class="chk">
@@ -424,7 +414,7 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   items:["太陽能板","監控箱","支架","接線盒","電纜"],model:""};
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
-var NAS=readJSON(NAS_KEY,{host:"",user:"",pass:"",path:"",remember:false});
+var NAS=readJSON(NAS_KEY,{user:"",pass:"",remember:false});
 
 function readJSON(k,dflt){
   try{
@@ -758,14 +748,23 @@ var SYNO_ERR={
 };
 function synoErr(code){ return SYNO_ERR[code]||("錯誤碼 "+code); }
 
-function nasBase(){
-  var h=(NAS.host||"").trim().replace(/\/+$/,"");
-  return h||location.origin;
+/* ── 上傳目的地：固定值，使用者不可更改 ──
+   要換 NAS 位址或根目錄時改這兩行，其餘程式不必動。
+   NAS_URL 必須與本頁同源，否則瀏覽器會擋下上傳。 */
+var NAS_URL  = "https://yangchin.synology.me/pvapi/proxy.php";
+var NAS_ROOT = "/暘勤/99 維運上傳照片";
+
+function nasBase(){ return NAS_URL; }
+
+// 資料夾名稱不得含這些字元，否則 Synology 會拒絕或被誤判為路徑分隔
+function safeFolder(s){
+  return String(s==null?"":s).replace(/[\\\/:*?"<>|]/g,"_")
+    .replace(/^[.\s]+|[.\s]+$/g,"");
 }
+// 照片依維運區域分子資料夾，換案場只需改第 1 區的區域名稱
 function nasPath(){
-  var p=(NAS.path||"").trim().replace(/\/+$/,"");
-  if(p&&p.charAt(0)!=="/") p="/"+p;
-  return p;
+  var area=safeFolder(S.area);
+  return area ? NAS_ROOT+"/"+area : NAS_ROOT;
 }
 
 // 網址以 .php 結尾＝走 NAS 上的同源轉發程式，端點用查詢參數指定；
@@ -822,8 +821,6 @@ function synoLogin(){
     api:"SYNO.API.Auth",version:"6",method:"login",
     account:NAS.user||"",passwd:NAS.pass||"",session:"FileStation",format:"sid"
   });
-  var otp=($("nOtp").value||"").trim();
-  if(otp) body.set("otp_code",otp);
   return fetch(apiUrl("auth.cgi"),{method:"POST",body:body})
     .then(function(r){
       if(!r.ok) throw new Error("NAS 回應 HTTP "+r.status);
@@ -878,8 +875,9 @@ function uploadSelected(){
     setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 2 區填好再上傳。","warn");
     return;
   }
-  if(!NAS.path){
-    setNote($("actState"),"<b>還沒填上傳資料夾。</b>到設定頁第 2 區填好再上傳。","warn");
+  if(!safeFolder(S.area)){
+    setNote($("actState"),"<b>還沒填維運區域。</b>照片要依區域分資料夾，"+
+      "到設定頁第 1 區填好再上傳。","warn");
     return;
   }
   var todo=photos.filter(function(p){return ids.indexOf(p.id)>=0;});
@@ -960,12 +958,19 @@ function initPersist(){
 }
 
 /* ═══════════ 設定頁事件 ═══════════ */
+function renderPathPreview(){
+  var area=safeFolder(S.area);
+  $("pathPreview").textContent=area
+    ? nasPath()+"/"
+    : NAS_ROOT+"/（請先在第 1 區填維運區域）";
+}
 function fillForms(){
   $("sArea").value=S.area; $("sWork").value=S.work;
   $("sItems").value=S.items.join("\n"); $("sModel").value=S.model;
-  $("nHost").value=NAS.host; $("nUser").value=NAS.user;
+  $("nUser").value=NAS.user;
   $("nPass").value=NAS.remember?NAS.pass:"";
-  $("nPath").value=NAS.path; $("nRemember").checked=!!NAS.remember;
+  $("nRemember").checked=!!NAS.remember;
+  renderPathPreview();
 }
 $("btnSaveSet").addEventListener("click",function(){
   var items=$("sItems").value.split("\n").map(function(x){return x.trim();}).filter(Boolean);
@@ -973,25 +978,24 @@ $("btnSaveSet").addEventListener("click",function(){
   S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim(); S.items=items;
   writeJSON(SET_KEY,S);
   if(items.indexOf(curItem)<0) curItem=items[0];
-  renderNow(); renderItemBtns();
+  renderNow(); renderItemBtns(); renderPathPreview();
   alert("已儲存。");
 });
+$("sArea").addEventListener("input",function(){
+  S.area=$("sArea").value.trim(); renderPathPreview();
+});
 $("btnNasSave").addEventListener("click",function(){
-  NAS.host=$("nHost").value.trim();
   NAS.user=$("nUser").value.trim();
   NAS.pass=$("nPass").value;
-  NAS.path=$("nPath").value.trim();
   NAS.remember=$("nRemember").checked;
-  var toSave={host:NAS.host,user:NAS.user,path:NAS.path,remember:NAS.remember,
-    pass:NAS.remember?NAS.pass:""};
-  writeJSON(NAS_KEY,toSave);
+  writeJSON(NAS_KEY,{user:NAS.user,remember:NAS.remember,
+    pass:NAS.remember?NAS.pass:""});
   setNote($("nasState"),NAS.remember
     ? "<b>已儲存（含密碼）。</b>密碼是明文存在這支手機裡。"
     : "<b>已儲存。</b>密碼沒有記住，這次開啟期間有效，重新整理後要再輸入一次。","ok");
 });
 $("btnNasTest").addEventListener("click",function(){
-  NAS.host=$("nHost").value.trim(); NAS.user=$("nUser").value.trim();
-  NAS.pass=$("nPass").value; NAS.path=$("nPath").value.trim();
+  NAS.user=$("nUser").value.trim(); NAS.pass=$("nPass").value;
   testNas();
 });
 $("btnLoadModel").addEventListener("click",function(){ loadModel($("sModel").value); });
@@ -1047,7 +1051,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12b";
+var APP_VERSION="2026-09-12c";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1140,6 +1144,10 @@ startCam();
 if(S.model) loadModel(S.model);
 
 window.__pv={
+  // 自動化測試用：把固定的上傳目的地指向測試伺服器
+  _setNasUrl:function(u){ NAS_URL=u; },
+  get nasUrl(){ return NAS_URL; }, get nasPath(){ return nasPath(); },
+  _safeFolder:safeFolder,
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
   setCur:function(v){ curItem=v; renderNow(); renderItemBtns(); },
