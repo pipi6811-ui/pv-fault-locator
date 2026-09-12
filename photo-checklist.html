@@ -279,42 +279,58 @@
   <div id="pSet" class="page">
 
     <section>
-      <div class="sec-head"><span class="num">1</span><h2>浮水印內容</h2></div>
+      <div class="sec-head"><span class="num">1</span><h2>你是誰</h2></div>
       <div class="sec-body">
-        <div class="field">
-          <label>維運區域</label>
-          <input id="sArea" type="text" placeholder="例：新光國小- 屋頂型">
-        </div>
         <div class="field">
           <label>你的名字</label>
           <input id="sWho" type="text" placeholder="例：陳小明">
           <p class="hint">
             用來標記訓練樣本是誰拍的。多人共同訓練時，才看得出誰的資料讓辨識變差。
-            不會出現在照片浮水印上。
+            <b>沒填就不會把樣本共用出去。</b>不會出現在照片浮水印上。
           </p>
+        </div>
+        <button class="b1" id="btnSaveWho" type="button" style="width:100%">儲存</button>
+        <div class="note hidden" id="whoState"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">2</span><h2>浮水印內容</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>業主</label>
+          <select id="sOwner"></select>
+          <p class="hint">
+            換業主，下面的檢查項目會跟著換。項目由公司統一設定，
+            不能在手機上改，這樣大家拍同一個東西才會用同一個名稱。
+          </p>
+        </div>
+        <div class="field">
+          <label>這個業主的檢查項目</label>
+          <div class="fixed-path" id="itemsPreview">—</div>
+          <p class="hint">這些會變成拍照頁的按鈕。看到什麼就點哪一個，不限順序。</p>
+        </div>
+        <div class="field">
+          <label>維運區域</label>
+          <input id="sArea" type="text" placeholder="例：新光國小- 屋頂型">
         </div>
         <div class="field">
           <label>維運內容</label>
           <input id="sWork" type="text" placeholder="例：Q3定檢">
-        </div>
-        <div class="field">
-          <label>檢查項目（一行一項）</label>
-          <textarea id="sItems" rows="7" placeholder="太陽能板&#10;監控箱&#10;支架&#10;接線盒&#10;電纜"></textarea>
-          <p class="hint">這些會變成拍照頁的按鈕。看到什麼就點哪一個，不限順序。</p>
         </div>
         <button class="b1" id="btnSaveSet" type="button" style="width:100%">儲存</button>
       </div>
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">2</span><h2>Synology NAS 上傳</h2></div>
+      <div class="sec-head"><span class="num">3</span><h2>Synology NAS 上傳</h2></div>
       <div class="sec-body">
         <div class="field">
           <label>照片會傳到這裡</label>
           <div class="fixed-path" id="pathPreview">—</div>
           <p class="hint">
             上傳位置固定，不能在這裡更改，避免誤改造成照片跑掉。
-            子資料夾會依上面第 1 區的<b>維運區域</b>自動建立，換案場只要改那一欄。
+            子資料夾會依上面第 2 區的<b>維運區域</b>自動建立，換案場只要改那一欄。
           </p>
         </div>
         <div class="row2">
@@ -340,7 +356,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
+      <div class="sec-head"><span class="num">4</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
@@ -384,7 +400,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">4</span><h2>儲存空間</h2></div>
+      <div class="sec-head"><span class="num">5</span><h2>儲存空間</h2></div>
       <div class="sec-body">
         <div id="quotaText" style="font-size:13px;font-weight:600">計算中…</div>
         <div class="bar"><i id="quotaBar"></i></div>
@@ -397,7 +413,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">5</span><h2>離線可用</h2></div>
+      <div class="sec-head"><span class="num">6</span><h2>離線可用</h2></div>
       <div class="sec-body">
         <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
         <div class="btnrow">
@@ -412,11 +428,11 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">6</span><h2>怎麼讓辨識變準</h2></div>
+      <div class="sec-head"><span class="num">7</span><h2>怎麼讓辨識變準</h2></div>
       <div class="sec-body">
         <div class="note">
           <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
-          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 3 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
+          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 4 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
           <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
           <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>。
         </div>
@@ -448,12 +464,41 @@ var $=function(id){return document.getElementById(id);};
 /* ═══════════ 設定 ═══════════ */
 var SET_KEY="pvshoot_set";
 var NAS_KEY="pvshoot_nas";
+/* ── 各業主的檢查項目：固定值，同仁不可更改 ──
+   每家業主的表格要拍的東西不一樣，而且名稱必須全隊一致——同一個東西被
+   打成「監控箱」和「監視箱」，辨識模型會當成兩類，資料就被切一半。
+   要新增業主或調整項目，改這一份就好，其餘程式不必動。
+   名稱盡量沿用既有字眼；不同業主指同一個東西時用同一個詞，訓練資料才不會被拆散。 */
+var OWNERS=[
+  {name:"通用",
+   items:["太陽能板","監控箱","支架","接線盒","電纜"]}
+  // 要加業主就照這個格式往下加，例如：
+  // ,{name:"○○科技",
+  //   items:["太陽能板","逆變器","直流配電箱","交流配電箱","電表","支架"]}
+];
+
+function ownerNames(){ return OWNERS.map(function(o){ return o.name; }); }
+function ownerOf(name){
+  for(var i=0;i<OWNERS.length;i++) if(OWNERS[i].name===name) return OWNERS[i];
+  return OWNERS[0];
+}
+// 拍照頁的按鈕、浮水印可用的項目，一律以目前業主為準
+function curItems(){ return ownerOf(S.owner).items.slice(); }
+// 訓練樣本跨業主共用，比對名稱時要看所有業主的項目，否則別家的會被誤判成打錯字
+function allItems(){
+  var out=[];
+  OWNERS.forEach(function(o){ o.items.forEach(function(i){ if(out.indexOf(i)<0) out.push(i); }); });
+  return out;
+}
+
 var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
-  items:["太陽能板","監控箱","支架","接線盒","電纜"],model:"",
+  owner:OWNERS[0].name,   // 業主決定檢查項目
+  model:"",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
   exclude:[]};       // 訓練時要排除哪些人的樣本
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
+if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
 var NAS=readJSON(NAS_KEY,{user:"",pass:"",remember:false});
 
 function readJSON(k,dflt){
@@ -561,7 +606,7 @@ function kvSet(k,v){ return store("kv","readwrite").then(function(st){ return re
 function kvDel(k){ return store("kv","readwrite").then(function(st){ return req(st.delete(k)); }); }
 
 /* ═══════════ 狀態 ═══════════ */
-var curItem=S.items[0]||"";
+var curItem=curItems()[0]||"";
 var photos=[];        // {id,item,area,work,blob,time,uploaded}
 var selected={};      // {id:true}
 var urlCache={};      // id -> objectURL
@@ -580,7 +625,7 @@ function renderNow(){
 }
 function renderItemBtns(){
   var box=$("itemBtns"); box.innerHTML="";
-  S.items.forEach(function(name){
+  curItems().forEach(function(name){
     var b=document.createElement("button");
     b.type="button";
     b.className="item-btn"+(name===curItem?" on":"");
@@ -681,7 +726,7 @@ function loadModel(url){
   return tmImage.load(url+"model.json",url+"metadata.json").then(function(m){
     model=m; S.model=url; writeJSON(SET_KEY,S);
     var labels=(m.getClassLabels?m.getClassLabels():[])||[];
-    var known=labels.filter(function(l){return S.items.indexOf(l)>=0;});
+    var known=labels.filter(function(l){return allItems().indexOf(l)>=0;});
     var msg="<b>狀態：</b>已載入 ✓ 類別："+esc(labels.join("、"));
     if(!known.length){
       setNote($("modelState"),msg+"<br><b>注意：</b>模型類別和檢查項目對不起來，辨識結果無法自動套用。請把兩邊文字改成一致。","warn");
@@ -1054,7 +1099,7 @@ function trainKnn(onNote){
     if(Object.keys(labels).length<2)
       throw htmlErr("至少要有 <b>2 個不同項目</b>的樣本才能訓練，不然沒有東西可以分辨。");
     // 有人把項目名稱打得不一樣，會被當成不同類別，要講出來
-    var unknown=Object.keys(labels).filter(function(l){ return S.items.indexOf(l)<0; });
+    var unknown=Object.keys(labels).filter(function(l){ return allItems().indexOf(l)<0; });
     say("評估辨識率…");
     return holdoutEval(all).then(function(ev){ ev.unknown=unknown; return ev; });
   }).then(function(ev){
@@ -1099,7 +1144,7 @@ function shoot(){
 
   classify(cv).then(function(hit){
     var overrode=false;
-    if(hit&&hit.prob>=0.7&&S.items.indexOf(hit.label)>=0&&hit.label!==curItem){
+    if(hit&&hit.prob>=0.7&&curItems().indexOf(hit.label)>=0&&hit.label!==curItem){
       curItem=hit.label; overrode=true;
     }
     if(hit){
@@ -1337,12 +1382,12 @@ function uploadSelected(){
     return;
   }
   if(!NAS.user||!NAS.pass){
-    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 2 區填好再上傳。","warn");
+    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 3 區填好再上傳。","warn");
     return;
   }
   if(!safeFolder(S.area)){
     setNote($("actState"),"<b>還沒填維運區域。</b>照片要依區域分資料夾，"+
-      "到設定頁第 1 區填好再上傳。","warn");
+      "到設定頁第 2 區填好再上傳。","warn");
     return;
   }
   var todo=photos.filter(function(p){return ids.indexOf(p.id)>=0;});
@@ -1437,25 +1482,51 @@ function renderPathPreview(){
   var area=safeFolder(S.area);
   $("pathPreview").textContent=area
     ? nasPath()+"/"
-    : NAS_ROOT+"/（請先在第 1 區填維運區域）";
+    : NAS_ROOT+"/（請先在第 2 區填維運區域）";
+}
+function renderOwnerSel(){
+  var sel=$("sOwner");
+  sel.innerHTML="";
+  ownerNames().forEach(function(n){
+    var o=document.createElement("option");
+    o.value=n; o.textContent=n; if(n===S.owner) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+function renderItemsPreview(){
+  $("itemsPreview").textContent=curItems().join("、");
 }
 function fillForms(){
   $("sArea").value=S.area; $("sWork").value=S.work;
   $("sWho").value=S.who||""; $("sExclude").value=(S.exclude||[]).join("、");
-  $("sItems").value=S.items.join("\n"); $("sModel").value=S.model;
+  $("sModel").value=S.model;
   $("nUser").value=NAS.user;
   $("nPass").value=NAS.remember?NAS.pass:"";
   $("nRemember").checked=!!NAS.remember;
-  renderPathPreview();
+  renderOwnerSel(); renderItemsPreview(); renderPathPreview();
 }
-$("btnSaveSet").addEventListener("click",function(){
-  var items=$("sItems").value.split("\n").map(function(x){return x.trim();}).filter(Boolean);
-  if(!items.length){ alert("至少要有一個檢查項目。"); return; }
-  S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim(); S.items=items;
+// 換業主＝換整組檢查項目，拍照頁要跟著重畫
+function applyOwner(name){
+  S.owner=ownerNames().indexOf(name)>=0?name:OWNERS[0].name;
+  var items=curItems();
+  if(items.indexOf(curItem)<0) curItem=items[0]||"";
+  renderItemsPreview(); renderNow(); renderItemBtns();
+}
+$("sOwner").addEventListener("change",function(){ applyOwner($("sOwner").value); });
+$("btnSaveWho").addEventListener("click",function(){
   S.who=$("sWho").value.trim();
   writeJSON(SET_KEY,S);
-  if(items.indexOf(curItem)<0) curItem=items[0];
-  renderNow(); renderItemBtns(); renderPathPreview();
+  setNote($("whoState"),S.who
+    ? "<b>已儲存。</b>之後上傳的訓練樣本會標上「"+esc(S.who)+"」。"
+    : "<b>名字是空的。</b>訓練樣本不會共用出去，因為分不出是誰貢獻的。",
+    S.who?"ok":"warn");
+  renderSampState();
+});
+$("btnSaveSet").addEventListener("click",function(){
+  applyOwner($("sOwner").value);
+  S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim();
+  writeJSON(SET_KEY,S);
+  renderPathPreview();
   alert("已儲存。");
 });
 $("sArea").addEventListener("input",function(){
@@ -1639,7 +1710,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12f";
+var APP_VERSION="2026-09-12g";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1748,6 +1819,7 @@ window.__pv={
   samples:sampAll, train:trainKnn, _to224:to224,
   _keepSample:keepSample, _clearSamples:sampClear, _kvGet:kvGet, classify:classify,
   _shared:shAll, _shClear:shClear, _push:pushSamples, _pull:pullShared,
+  get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
