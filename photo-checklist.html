@@ -881,6 +881,8 @@ function apiVers(sid){
 }
 
 function pushSamples(sid){
+  // 共用樣本一定要知道是誰貢獻的，否則訓練報告分不出是誰的資料有問題
+  if(!safeFolder(S.who)) return Promise.resolve({sent:0,noName:true});
   return sampAll().then(function(a){
     var todo=a.filter(function(s){ return s.emb&&!s.synced; });
     if(!todo.length) return {sent:0};
@@ -1347,7 +1349,7 @@ function uploadSelected(){
   uploading=true; $("btnUpload").disabled=true;
   setNote($("actState"),"<b>登入 NAS…</b>");
 
-  var okN=0, failN=0, firstErr="", sentSamples=0, sampleErr=false;
+  var okN=0, failN=0, firstErr="", sentSamples=0, sampleErr=false, noName=false;
   synoLogin().then(function(sid){
     var chain=Promise.resolve();
     todo.forEach(function(p,i){
@@ -1363,13 +1365,16 @@ function uploadSelected(){
     // 照片傳完，順手把新的訓練樣本也送上去給大家共用
     return chain.then(function(){
       setNote($("actState"),"<b>上傳訓練樣本…</b>");
-      return pushSamples(sid).then(function(r){ sentSamples=r.sent; })
-        .catch(function(){ sampleErr=true; });
+      return pushSamples(sid).then(function(r){
+        sentSamples=r.sent; noName=!!r.noName;
+      }).catch(function(){ sampleErr=true; });
     }).then(function(){ return synoLogout(sid); });
   }).then(function(){
     return refreshPhotos();
   }).then(function(){
     var extra=sentSamples?"，另有 "+sentSamples+" 筆訓練樣本已共用":
+      noName?"。<b>訓練樣本沒有共用出去</b>——設定頁第 1 區還沒填「你的名字」，"+
+        "沒有名字就分不出是誰貢獻的。填好後下次上傳會一起送。":
       (sampleErr?"（訓練樣本沒送成功，下次上傳會再試）":"");
     if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+esc(nasPath())+"</code>"+extra,"ok");
     else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
@@ -1494,7 +1499,10 @@ function renderSampState(){
       body+="<br><b>其中同仁共用：</b>"+sh.length+" 張（"+fmtCounts(w)+"）";
     }
     var unsent=a.filter(function(s){ return s.emb&&!s.synced; }).length;
-    if(unsent) body+="<br>"+unsent+" 張還沒共用出去，下次按「上傳 NAS」時會一起送。";
+    if(unsent&&!safeFolder(S.who))
+      body+="<br><b>"+unsent+" 張沒辦法共用</b>：請先在第 1 區填「你的名字」。";
+    else if(unsent)
+      body+="<br>"+unsent+" 張還沒共用出去，下次按「上傳 NAS」時會一起送。";
     if(knnMeta&&knnMeta.trained){
       body+="<br><b>目前使用：</b>手機上訓練的模型（"+
         knnMeta.trained.slice(0,10)+"）"+
@@ -1631,7 +1639,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12e";
+var APP_VERSION="2026-09-12f";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
