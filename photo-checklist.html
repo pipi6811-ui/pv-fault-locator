@@ -1,0 +1,2015 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>維運拍照 · 檢查項目浮水印</title>
+<meta name="description" content="太陽光電維運現場拍照工具：點一下選檢查項目，拍照自動帶浮水印，可批次存相簿或上傳 Synology NAS。">
+<meta name="theme-color" content="#14181B">
+<link rel="manifest" href="manifest-shoot.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="維運拍照">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+<style>
+  :root{
+    --bg:#E7E4DC; --panel:#FBFAF7; --ink:#14181B; --ink-soft:#565B5F;
+    --line:#CFCBC1; --line-strong:#A9A498;
+    --green:#1E7A46; --green-bg:#E2F0E6;
+    --amber:#A8690A; --amber-bg:#F8ECCF;
+    --danger:#B23B30; --danger-bg:#F6E2DF;
+    --hazard:#F4C20D;
+    --mono:"SFMono-Regular","SF Mono","JetBrains Mono","Roboto Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{font-family:var(--sans);background:var(--bg);color:var(--ink);line-height:1.55;
+    padding:0 0 env(safe-area-inset-bottom);-webkit-text-size-adjust:100%;}
+  .wrap{max-width:540px;margin:0 auto;padding:0 12px 40px;}
+
+  header{margin:12px 0;border:2px solid var(--ink);background:var(--panel);
+    border-radius:10px;overflow:hidden;}
+  .plate{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:12px 14px 10px;}
+  .plate h1{font-size:17px;font-weight:800;letter-spacing:-.02em;margin:0;}
+  .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;
+    color:var(--ink-soft);border:1px solid var(--line-strong);border-radius:4px;padding:2px 6px;white-space:nowrap;}
+
+  .tabs{display:flex;gap:6px;margin-bottom:12px;}
+  .tab{flex:1;padding:12px 6px;border:2px solid var(--line-strong);background:var(--panel);
+    color:var(--ink);border-radius:9px;font-weight:700;font-size:13px;font-family:var(--sans);cursor:pointer;}
+  .tab.on{background:var(--ink);color:var(--panel);border-color:var(--ink);}
+  .tab .badge{font-family:var(--mono);font-size:11px;opacity:.75;}
+
+  section{background:var(--panel);border:1.5px solid var(--line);border-radius:10px;
+    margin-bottom:12px;overflow:hidden;}
+  .sec-head{display:flex;align-items:center;gap:8px;padding:9px 13px;
+    border-bottom:1.5px solid var(--line);background:#F2F0EA;}
+  .sec-head .num{font-family:var(--mono);font-size:12px;font-weight:700;background:var(--ink);
+    color:var(--panel);width:20px;height:20px;border-radius:5px;display:grid;place-items:center;flex:0 0 auto;}
+  .sec-head h2{font-size:14px;font-weight:700;margin:0;letter-spacing:-.01em;}
+  .sec-body{padding:13px;}
+
+  .page{display:none;} .page.on{display:block;}
+  .hidden{display:none!important;}
+
+  .now{border:2px solid var(--ink);border-radius:12px;background:var(--hazard);
+    padding:10px 14px;margin-bottom:10px;}
+  .now-k{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:#5a4a06;}
+  .now-v{font-size:28px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:1px;word-break:break-all;}
+  .now-meta{font-size:12.5px;font-weight:700;color:#5a4a06;margin-top:3px;}
+
+  .cam{position:relative;background:#000;border-radius:10px;overflow:hidden;aspect-ratio:4/3;}
+  .cam video{width:100%;height:100%;object-fit:cover;display:block;}
+  .cam-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
+    color:#fff;font-size:13px;font-weight:600;padding:20px;background:#000;}
+  .ai-chip{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;
+    padding:5px 9px;border-radius:6px;font-size:12px;font-weight:700;}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;}
+  .flash.go{animation:fl .32s ease-out;}
+  @keyframes fl{from{opacity:.85;}to{opacity:0;}}
+  @media (prefers-reduced-motion:reduce){.flash.go{animation:none;}}
+
+  .shutter{width:100%;margin-top:10px;padding:20px 16px;font-size:20px;font-weight:800;
+    font-family:var(--sans);border:2px solid var(--ink);border-radius:12px;
+    background:var(--ink);color:var(--panel);cursor:pointer;}
+  .shutter:active{background:#000;transform:scale(.99);}
+  .shutter:disabled{opacity:.45;}
+
+  /* 項目按鈕：常駐，點一下切換，不自動跳 */
+  .items{display:grid;grid-template-columns:repeat(auto-fill,minmax(102px,1fr));gap:7px;}
+  .item-btn{position:relative;padding:14px 8px;border:2px solid var(--line-strong);
+    background:var(--panel);color:var(--ink);border-radius:10px;font-family:var(--sans);
+    font-size:15px;font-weight:700;cursor:pointer;text-align:center;line-height:1.25;}
+  .item-btn.on{background:var(--hazard);border-color:var(--ink);}
+  .item-btn .n{position:absolute;top:3px;right:5px;font-family:var(--mono);font-size:11px;
+    font-weight:700;color:var(--ink-soft);}
+  .item-btn.on .n{color:#5a4a06;}
+
+  button{font-family:var(--sans);font-size:15px;font-weight:700;padding:12px 15px;
+    border-radius:9px;border:2px solid var(--ink);cursor:pointer;}
+  .btnrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .b1{flex:1;min-width:120px;background:var(--ink);color:var(--panel);}
+  .b1:active{background:#000;}
+  .b1:disabled{opacity:.45;}
+  .b2{flex:1;min-width:120px;background:var(--panel);color:var(--ink);}
+  .b2:active{background:#EBE8E1;}
+  .b2:disabled{opacity:.45;}
+  .b-sm{font-size:13px;padding:9px 12px;border-width:1.5px;border-color:var(--line-strong);
+    background:var(--panel);color:var(--ink);}
+  .b-danger{color:var(--danger);border-color:#dba59e;background:var(--danger-bg);}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;}
+  .thumb{position:relative;border:2px solid var(--line);border-radius:9px;overflow:hidden;
+    background:#fff;cursor:pointer;}
+  .thumb.sel{border-color:var(--ink);box-shadow:0 0 0 3px rgba(20,24,27,.16);}
+  .thumb img{width:100%;display:block;aspect-ratio:4/3;object-fit:cover;}
+  .thumb .cap{font-size:11.5px;font-weight:700;padding:5px 7px;border-top:1px solid var(--line);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .thumb .cap small{display:block;font-weight:400;color:var(--ink-soft);
+    font-family:var(--mono);font-size:10px;}
+  .thumb .mark{position:absolute;top:5px;left:5px;width:21px;height:21px;border-radius:6px;
+    border:2px solid var(--ink);background:#fff;display:grid;place-items:center;
+    font-size:13px;font-weight:800;line-height:1;}
+  .thumb.sel .mark{background:var(--ink);color:#fff;}
+  .thumb .up{position:absolute;top:5px;right:5px;background:var(--green);color:#fff;
+    font-size:10px;font-weight:800;padding:2px 5px;border-radius:5px;}
+
+  .field{margin-bottom:12px;} .field:last-child{margin-bottom:0;}
+  .field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px;}
+  .field input,.field textarea{width:100%;font-family:var(--sans);font-size:15px;
+    padding:10px;border:1.5px solid var(--line-strong);border-radius:8px;background:#fff;color:var(--ink);}
+  .field textarea{resize:vertical;line-height:1.6;font-family:var(--mono);font-size:14px;}
+  .field input:focus,.field textarea:focus{outline:none;border-color:var(--ink);
+    box-shadow:0 0 0 3px rgba(20,24,27,.1);}
+  .hint{font-size:12px;color:var(--ink-soft);line-height:1.55;margin:6px 0 0;}
+  .fixed-path{font-family:var(--mono);font-size:13px;line-height:1.5;
+    padding:10px;border:1.5px solid var(--line);border-radius:8px;
+    background:#F2F0EA;color:var(--ink);word-break:break-all;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;}
+  .chk input{width:20px;height:20px;flex:0 0 auto;}
+
+  .note{font-size:12.5px;color:var(--ink-soft);line-height:1.6;background:#F2F0EA;
+    border-radius:8px;padding:10px 12px;margin-top:10px;}
+  .note b{color:var(--ink);}
+  .note.warn{background:var(--amber-bg);color:#5c3d06;} .note.warn b{color:#5c3d06;}
+  .note.ok{background:var(--green-bg);color:#245c3d;} .note.ok b{color:#245c3d;}
+  .note.bad{background:var(--danger-bg);color:#7a2a22;} .note.bad b{color:#7a2a22;}
+  .note code{font-family:var(--mono);font-size:11.5px;background:rgba(20,24,27,.07);
+    padding:1px 4px;border-radius:3px;}
+
+  .bar{height:9px;border-radius:5px;background:#E3E0D8;border:1px solid var(--line-strong);
+    overflow:hidden;margin-top:6px;}
+  .bar i{display:block;height:100%;background:var(--ink);width:0;}
+  .bar i.warn{background:var(--amber);}
+
+  /* 手機橫拍：畫面高度不足，直排會把快門推出螢幕。
+     改成左 2/3 取景、右 1/3 放快門與項目，全部收在一個畫面內。 */
+  @media (orientation:landscape) and (max-height:600px){
+    .wrap{max-width:none;padding:0 8px 8px;}
+    header{display:none;}
+    .tabs{gap:5px;margin-bottom:6px;}
+    .tab{padding:7px 4px;font-size:12px;}
+
+    #pShoot.on{
+      display:grid;
+      grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+      grid-template-rows:auto auto minmax(0,1fr);
+      grid-template-areas:"cam now" "cam shutter" "cam items";
+      gap:7px;
+      height:calc(100vh - 52px);
+      height:calc(100dvh - 52px);
+    }
+    #pShoot > .cam{grid-area:cam;aspect-ratio:auto;height:100%;min-height:0;}
+    #pShoot > .now{grid-area:now;margin:0;padding:6px 10px;}
+    #pShoot > .now .now-k{font-size:10px;letter-spacing:.1em;}
+    #pShoot > .now .now-v{font-size:20px;}
+    #pShoot > .now .now-meta{font-size:11px;margin-top:1px;}
+    #pShoot > .shutter{grid-area:shutter;margin:0;padding:14px 10px;font-size:17px;}
+    #pShoot > section{grid-area:items;margin:0;min-height:0;overflow-y:auto;}
+    #pShoot > section .sec-head{display:none;}
+    #pShoot > section .sec-body{padding:8px;}
+    #pShoot .items{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:5px;}
+    #pShoot .item-btn{padding:9px 4px;font-size:13px;}
+    #pShoot .btnrow{margin-top:6px;}
+    #pShoot #remoteHint{display:none;}
+    #pShoot .btnrow .b-sm{padding:7px 8px;font-size:12px;}
+  }
+
+  .empty{text-align:center;color:var(--ink-soft);padding:22px 10px;font-size:13px;}
+  .selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-size:13px;font-weight:700;margin-bottom:10px;}
+  .selbar .sp{margin-left:auto;font-family:var(--mono);font-size:12px;
+    font-weight:600;color:var(--ink-soft);}
+  footer{text-align:center;font-size:11px;color:var(--ink-soft);font-family:var(--mono);
+    margin-top:8px;letter-spacing:.04em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="plate">
+      <h1>維運拍照</h1>
+      <span class="tag">PHOTO&middot;STAMP</span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-p="pShoot" type="button">拍照</button>
+    <button class="tab" data-p="pShots" type="button">照片 <span class="badge" id="tabCount">0</span></button>
+    <button class="tab" data-p="pSet" type="button">設定</button>
+  </div>
+
+  <!-- ══════════ 拍照 ══════════ -->
+  <div id="pShoot" class="page on">
+
+    <div class="now">
+      <div class="now-k">浮水印的檢查項目</div>
+      <div class="now-v" id="nowItem">—</div>
+      <div class="now-meta" id="nowMeta">—</div>
+    </div>
+
+    <div class="cam" id="camBox">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="flash" id="flash"></div>
+      <div class="cam-msg" id="camMsg">相機啟動中…</div>
+      <div class="ai-chip hidden" id="aiChip">AI 待命</div>
+    </div>
+
+    <button class="shutter" id="shutter" type="button" disabled>拍照</button>
+
+    <section style="margin-top:12px">
+      <div class="sec-head">
+        <span class="num">◉</span>
+        <h2>換標的物就點一下</h2>
+      </div>
+      <div class="sec-body">
+        <div class="items" id="itemBtns"></div>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
+        </div>
+        <p class="hint" id="remoteHint">
+          藍牙快門遙控器可直接按下拍照（Enter／空白／上下鍵皆可）。
+          手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════ 照片 ══════════ -->
+  <div id="pShots" class="page">
+    <section>
+      <div class="sec-head"><span class="num">▣</span><h2>照片</h2></div>
+      <div class="sec-body">
+        <div class="selbar" id="selBar">
+          <button class="b-sm" id="btnSelAll" type="button">全選</button>
+          <button class="b-sm" id="btnSelNone" type="button">取消選取</button>
+          <button class="b-sm" id="btnSelNotUp" type="button">選未上傳</button>
+          <span class="sp" id="selInfo">已選 0</span>
+        </div>
+        <div class="empty" id="shotsEmpty">還沒有照片。</div>
+        <div class="grid hidden" id="shotsGrid"></div>
+      </div>
+    </section>
+
+    <section id="actSec" class="hidden">
+      <div class="sec-head"><span class="num">↥</span><h2>處理選取的照片</h2></div>
+      <div class="sec-body">
+        <div class="btnrow">
+          <button class="b1" id="btnUpload" type="button">上傳到 NAS</button>
+          <button class="b2" id="btnShare" type="button">存到相簿</button>
+        </div>
+        <div class="btnrow">
+          <button class="b2 b-sm b-danger" id="btnDel" type="button">刪除選取的照片</button>
+        </div>
+        <div class="note hidden" id="actState"></div>
+        <div class="note">
+          <b>存到相簿：</b>會跳出手機的分享面板，選「儲存影像」。iPhone 一次分享太多張容易失敗，建議每次選 10 張以內。<br>
+          <b>上傳 NAS：</b>需要先在設定頁填好 NAS 資訊。上傳成功的照片會標上綠色 <b>✓</b>，不會重複上傳。
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════ 設定 ══════════ -->
+  <div id="pSet" class="page">
+
+    <section>
+      <div class="sec-head"><span class="num">1</span><h2>你是誰</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>你的名字</label>
+          <input id="sWho" type="text" placeholder="例：陳小明">
+          <p class="hint">
+            用來標記訓練樣本是誰拍的。多人共同訓練時，才看得出誰的資料讓辨識變差。
+            <b>沒填就不會把樣本共用出去。</b>不會出現在照片浮水印上。
+          </p>
+        </div>
+        <button class="b1" id="btnSaveWho" type="button" style="width:100%">儲存</button>
+        <div class="note hidden" id="whoState"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">2</span><h2>浮水印內容</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>業主</label>
+          <select id="sOwner"></select>
+          <p class="hint">
+            換業主，下面的檢查項目會跟著換。項目由公司統一設定，
+            不能在手機上改，這樣大家拍同一個東西才會用同一個名稱。
+          </p>
+        </div>
+        <div class="field">
+          <label>這個業主的檢查項目</label>
+          <div class="fixed-path" id="itemsPreview">—</div>
+          <p class="hint">這些會變成拍照頁的按鈕。看到什麼就點哪一個，不限順序。</p>
+        </div>
+        <div class="field">
+          <label>維運區域</label>
+          <input id="sArea" type="text" placeholder="例：新光國小- 屋頂型">
+        </div>
+        <div class="field">
+          <label>維運內容</label>
+          <input id="sWork" type="text" placeholder="例：Q3定檢">
+        </div>
+        <button class="b1" id="btnSaveSet" type="button" style="width:100%">儲存</button>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">3</span><h2>拍照回饋</h2></div>
+      <div class="sec-body">
+        <p class="hint" style="margin-top:0">
+          大太陽下螢幕常常看不清楚，戴手套也感覺不到按鈕有沒有按到。
+          開著這兩項，不用盯螢幕也知道有沒有拍進去。
+        </p>
+        <div class="field">
+          <label class="chk"><input id="sVib" type="checkbox"><span>震動</span></label>
+          <label class="chk"><input id="sSnd" type="checkbox"><span>快門聲</span></label>
+        </div>
+        <div class="btnrow">
+          <button class="b2" id="btnFbTest" type="button">試一下</button>
+        </div>
+        <div class="note" id="fbState">—</div>
+        <p class="hint">
+          失敗時震動與聲音都不一樣（長—長），所以照片沒存進去你會立刻知道，
+          不會整輪拍完才發現少了幾張。AI 自動改掉項目時是短震兩下，提醒你看一眼。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">4</span><h2>Synology NAS 上傳</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label>照片會傳到這裡</label>
+          <div class="fixed-path" id="pathPreview">—</div>
+          <p class="hint">
+            上傳位置固定，不能在這裡更改，避免誤改造成照片跑掉。
+            子資料夾會依上面第 2 區的<b>維運區域</b>自動建立，換案場只要改那一欄。
+          </p>
+        </div>
+        <div class="row2">
+          <div class="field"><label>帳號</label><input id="nUser" type="text" autocomplete="username"></div>
+          <div class="field"><label>密碼</label><input id="nPass" type="password" autocomplete="current-password"></div>
+        </div>
+        <div class="field">
+          <label class="chk">
+            <input id="nRemember" type="checkbox">
+            <span>記住密碼</span>
+          </label>
+          <p class="hint">
+            密碼會以明文存在這支手機的瀏覽器裡。手機借人或遺失就等於密碼外流。
+            建議在 NAS 上另開一個只有這個資料夾寫入權限的帳號給這支 App 用。
+          </p>
+        </div>
+        <div class="btnrow">
+          <button class="b1" id="btnNasSave" type="button">儲存</button>
+          <button class="b2" id="btnNasTest" type="button">測試連線</button>
+        </div>
+        <div class="note hidden" id="nasState"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">5</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
+      <div class="sec-body">
+        <p class="hint" style="margin-top:0">
+          你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
+          收夠了按「開始訓練」，之後拍照就會自動跳到對的項目。
+          <b>訓練在手機上做，上傳時只送特徵數值，照片不會外傳。</b>
+        </p>
+        <div class="note" id="sampState"><b>訓練樣本：</b>計算中…</div>
+        <div class="field">
+          <label>訓練時排除這些人的樣本</label>
+          <input id="sExclude" type="text" placeholder="留空＝全部採用；多人用逗號分隔">
+          <p class="hint">
+            訓練報告會列出每個人的答對率。發現誰的資料在拖後腿（通常是換標的物忘記
+            點項目按鈕），先填在這裡排除再訓練一次，不用整包砍掉。
+          </p>
+        </div>
+        <div class="btnrow">
+          <button class="b1" id="btnTrain" type="button">開始訓練</button>
+          <button class="b2 b-sm" id="btnRollback" type="button">回上一版</button>
+          <button class="b2 b-sm b-danger" id="btnWipeSamples" type="button">清空訓練資料</button>
+        </div>
+        <div class="note hidden" id="trainState"></div>
+        <div class="note" id="modelState"><b>狀態：</b>未載入（手動選項目）</div>
+
+        <details style="margin-top:12px">
+          <summary style="font-size:13px;font-weight:700;cursor:pointer">進階：改用 Teachable Machine 模型</summary>
+          <div class="field" style="margin-top:10px">
+            <label>Teachable Machine 模型網址</label>
+            <input id="sModel" type="url" placeholder="https://teachablemachine.withgoogle.com/models/xxxxxxx/">
+            <p class="hint">
+              只有在還沒訓練過、或你想改用電腦訓練的模型時才需要。
+              <b>模型的分類名稱要和檢查項目文字一模一樣。</b>
+              已經訓練過的話，這裡填了也不會生效——手機上訓練的優先。
+            </p>
+          </div>
+          <div class="btnrow">
+            <button class="b2 b-sm" id="btnLoadModel" type="button">載入模型</button>
+            <button class="b2 b-sm" id="btnUnloadModel" type="button">停用</button>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">6</span><h2>儲存空間</h2></div>
+      <div class="sec-body">
+        <div id="quotaText" style="font-size:13px;font-weight:600">計算中…</div>
+        <div class="bar"><i id="quotaBar"></i></div>
+        <div class="note" id="persistNote"></div>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnRefreshQuota" type="button">重新計算</button>
+          <button class="b2 b-sm b-danger" id="btnWipe" type="button">刪除全部照片</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">7</span><h2>離線可用</h2></div>
+      <div class="sec-body">
+        <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
+        <div class="btnrow">
+          <button class="b2 b-sm" id="btnSwUpdate" type="button">檢查更新</button>
+          <button class="b2 b-sm" id="btnSwReset" type="button">強制抓最新版</button>
+        </div>
+        <p class="hint">
+          頁面版本顯示在最下方。若畫面跟我說的對不起來，按「強制抓最新版」，
+          它會清掉快取重新下載（照片與設定不受影響）。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">8</span><h2>怎麼讓辨識變準</h2></div>
+      <div class="sec-body">
+        <div class="note">
+          <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
+          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 5 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
+          <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
+          <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>。
+        </div>
+        <div class="note warn">
+          <b>兩件事會讓它學歪：</b><br>
+          · 換了標的物卻忘記點按鈕——那幾張會被貼上錯的項目拿去學。<br>
+          · 只在同一個案場拍——它可能學成「認這個屋頂」而不是「認太陽能板」。
+          多跑幾個案場再訓練會穩很多。<br>
+          <span class="hint" style="margin:6px 0 0">AI 自己改過項目的那張不會拿去學，避免它把自己的猜測當成標準答案，越練越偏。</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer id="ver">—</footer>
+</div>
+
+<canvas id="work" class="hidden"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+
+/* ═══════════ 設定 ═══════════ */
+var SET_KEY="pvshoot_set";
+var NAS_KEY="pvshoot_nas";
+/* ── 各業主的檢查項目：固定值，同仁不可更改 ──
+   要新增業主或調整項目，改這一份就好，其餘程式不必動。
+
+   一個項目可以寫成字串，或寫成物件：
+     "監控箱"                        浮水印與訓練都用「監控箱」
+     {name:"變流器", as:"逆變器"}     浮水印寫「變流器」，訓練時歸到「逆變器」
+     {name:"其他", train:false}       浮水印可以選，但不拿去訓練
+
+   as 是為了跨業主對齊：各家表格用字不同（變流器／逆變器、直流接線箱／
+   直流配電箱），浮水印必須照業主的用字，但訓練若跟著分家，同一個東西
+   會被當成兩類、資料被切一半。用 as 指回同一個訓練名稱就不會。
+
+   大衛那四組（太陽光電模組、變流器、直流接線箱、躉售電錶）已經跟實際
+   設備核對過，確認與另外兩家指的是同一個東西，所以合併是對的。之後看到
+   用字不同不要拆開——拆開就等於把同一類的訓練資料切成兩半。真的遇到
+   不同設備時，才給它自己的訓練名稱。
+
+   train:false 用在「其他」這種包山包海的項目：它底下什麼畫面都有，
+   拿去訓練只會讓模型到處誤判。 */
+var OWNERS=[
+  {name:"URE",
+   items:["模組","模組支架","逆變器","直流配電箱","交流配電箱","監控箱",
+          "109躉售電表","變壓器","高壓站","破片","遮陰",
+          {name:"其他",train:false}]},
+
+  {name:"鼎日",
+   items:["模組","模組支架","線槽","管線","電纜線","逆變器",
+          "直流配電箱","交流配電箱",
+          "年檢-接地電阻(模組)","年檢-接地電阻(逆變器)",
+          "年檢-接地電阻(直流箱)","年檢-接地電阻(交流箱)",
+          "年檢-絶緣電阻(交流箱)","年檢-絶緣電阻(直流箱)",
+          "監控箱","日照計","清洗設備","109躉售電表","高壓站",
+          "MP盤","VCB內部盤體","PT盤","變壓器","破片","遮陰",
+          {name:"其他",train:false}]},
+
+  {name:"大衛",
+   items:[{name:"太陽光電模組",as:"模組"},
+          "線槽",
+          {name:"直流接線箱",as:"直流配電箱"},
+          "交流配電箱",
+          {name:"變流器",as:"逆變器"},
+          "監控箱",
+          {name:"躉售電錶",as:"109躉售電表"},
+          "破片","遮陰",
+          {name:"其他",train:false}]}
+];
+
+function ownerNames(){ return OWNERS.map(function(o){ return o.name; }); }
+function ownerOf(name){
+  for(var i=0;i<OWNERS.length;i++) if(OWNERS[i].name===name) return OWNERS[i];
+  return OWNERS[0];
+}
+function itemDefs(){ return ownerOf(S.owner).items; }
+function defName(d){ return (typeof d==="string")?d:d.name; }
+function defKey(d){ return (typeof d==="string")?d:(d.as||d.name); }
+function defTrain(d){ return (typeof d==="string")?true:(d.train!==false); }
+
+// 拍照頁按鈕與浮水印用的是「顯示名稱」
+function curItems(){ return itemDefs().map(defName); }
+// 訓練樣本存的是「訓練名稱」，跨業主才對得起來
+function keyOf(display){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defName(ds[i])===display) return defKey(ds[i]);
+  return display;
+}
+// 辨識結果是訓練名稱，要換回目前業主表格上的用字才能寫進浮水印
+function displayOf(key){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defKey(ds[i])===key) return defName(ds[i]);
+  return null;
+}
+function trainableItem(display){
+  var ds=itemDefs();
+  for(var i=0;i<ds.length;i++) if(defName(ds[i])===display) return defTrain(ds[i]);
+  return true;
+}
+// 比對樣本標籤時要看所有業主的訓練名稱，否則別家的會被誤判成打錯字
+function allItems(){
+  var out=[];
+  OWNERS.forEach(function(o){ o.items.forEach(function(d){
+    var k=defKey(d); if(out.indexOf(k)<0) out.push(k);
+  }); });
+  return out;
+}
+
+var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
+  owner:OWNERS[0].name,   // 業主決定檢查項目
+  model:"",
+  who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
+  exclude:[],        // 訓練時要排除哪些人的樣本
+  vib:true, snd:true};  // 拍照回饋：震動、快門聲
+
+var S=readJSON(SET_KEY,DEFAULT_SET);
+if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
+var NAS=readJSON(NAS_KEY,{user:"",pass:"",remember:false});
+
+function readJSON(k,dflt){
+  try{
+    var raw=localStorage.getItem(k);
+    if(!raw) return JSON.parse(JSON.stringify(dflt));
+    var o=JSON.parse(raw), out=JSON.parse(JSON.stringify(dflt));
+    Object.keys(out).forEach(function(key){ if(o[key]!==undefined) out[key]=o[key]; });
+    if(out.items&&!out.items.length) out.items=dflt.items.slice();
+    return out;
+  }catch(e){ return JSON.parse(JSON.stringify(dflt)); }
+}
+function writeJSON(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+
+/* ═══════════ IndexedDB ═══════════ */
+var DB=null;
+function dbOpen(){
+  return new Promise(function(res,rej){
+    if(DB) return res(DB);
+    // v2 新增：samples（邊拍邊學的訓練樣本）、kv（訓練好的辨識資料與設定）
+    // v3 新增：shared（從 NAS 抓回來、同仁貢獻的樣本）
+    var rq=indexedDB.open("pvshoot",3);
+    rq.onupgradeneeded=function(){
+      var db=rq.result;
+      if(!db.objectStoreNames.contains("photos"))
+        db.createObjectStore("photos",{keyPath:"id",autoIncrement:true});
+      if(!db.objectStoreNames.contains("samples"))
+        db.createObjectStore("samples",{keyPath:"id",autoIncrement:true});
+      if(!db.objectStoreNames.contains("kv"))
+        db.createObjectStore("kv",{keyPath:"k"});
+      if(!db.objectStoreNames.contains("shared"))
+        db.createObjectStore("shared",{keyPath:"id",autoIncrement:true});
+    };
+    rq.onsuccess=function(){ DB=rq.result; res(DB); };
+    rq.onerror=function(){ rej(rq.error); };
+  });
+}
+function store(name,mode){
+  return dbOpen().then(function(db){ return db.transaction(name,mode).objectStore(name); });
+}
+function req(r){
+  return new Promise(function(res,rej){
+    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+  });
+}
+function tx(mode){ return store("photos",mode); }
+function dbAdd(rec){
+  return tx("readwrite").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.add(rec);
+      r.onsuccess=function(){ res(r.result); };
+      r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbAll(){
+  return tx("readonly").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.getAll();
+      r.onsuccess=function(){ res((r.result||[]).sort(function(a,b){return b.id-a.id;})); };
+      r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbPut(rec){
+  return tx("readwrite").then(function(st){
+    return new Promise(function(res,rej){
+      var r=st.put(rec);
+      r.onsuccess=function(){ res(); }; r.onerror=function(){ rej(r.error); };
+    });
+  });
+}
+function dbDel(ids){
+  return tx("readwrite").then(function(st){
+    return Promise.all(ids.map(function(id){
+      return new Promise(function(res){ var r=st.delete(id); r.onsuccess=function(){res();}; r.onerror=function(){res();}; });
+    }));
+  });
+}
+
+/* 訓練樣本與訓練成果分開存：刪照片不會刪掉學過的東西 */
+function sampAdd(rec){ return store("samples","readwrite").then(function(st){ return req(st.add(rec)); }); }
+function sampAll(){
+  return store("samples","readonly").then(function(st){ return req(st.getAll()); })
+    .then(function(a){ return (a||[]).sort(function(x,y){return x.id-y.id;}); });
+}
+function sampPut(rec){ return store("samples","readwrite").then(function(st){ return req(st.put(rec)); }); }
+function sampClear(){ return store("samples","readwrite").then(function(st){ return req(st.clear()); }); }
+function shAll(){
+  return store("shared","readonly").then(function(st){ return req(st.getAll()); })
+    .then(function(a){ return a||[]; });
+}
+function shAddMany(recs){
+  if(!recs.length) return Promise.resolve(0);
+  return store("shared","readwrite").then(function(st){
+    return Promise.all(recs.map(function(r){ return req(st.add(r)).catch(function(){}); }));
+  }).then(function(){ return recs.length; });
+}
+function shClear(){ return store("shared","readwrite").then(function(st){ return req(st.clear()); }); }
+function kvGet(k){
+  return store("kv","readonly").then(function(st){ return req(st.get(k)); })
+    .then(function(r){ return r?r.v:null; });
+}
+function kvSet(k,v){ return store("kv","readwrite").then(function(st){ return req(st.put({k:k,v:v})); }); }
+function kvDel(k){ return store("kv","readwrite").then(function(st){ return req(st.delete(k)); }); }
+
+/* ═══════════ 狀態 ═══════════ */
+var curItem=curItems()[0]||"";
+var photos=[];        // {id,item,area,work,blob,time,uploaded}
+var selected={};      // {id:true}
+var urlCache={};      // id -> objectURL
+
+function countOf(name){
+  var n=0; photos.forEach(function(p){ if(p.item===name) n++; }); return n;
+}
+function selIds(){
+  return Object.keys(selected).filter(function(k){return selected[k];}).map(Number);
+}
+
+/* ═══════════ 畫面：拍照頁 ═══════════ */
+function renderNow(){
+  $("nowItem").textContent=curItem||"（尚未設定檢查項目）";
+  $("nowMeta").textContent=(S.area||"未設定區域")+"　·　這一項已拍 "+countOf(curItem)+" 張";
+}
+function renderItemBtns(){
+  var box=$("itemBtns"); box.innerHTML="";
+  curItems().forEach(function(name){
+    var b=document.createElement("button");
+    b.type="button";
+    b.className="item-btn"+(name===curItem?" on":"");
+    var t=document.createElement("span"); t.textContent=name;
+    var n=document.createElement("span"); n.className="n";
+    var c=countOf(name); n.textContent=c?c:"";
+    b.appendChild(t); b.appendChild(n);
+    b.addEventListener("click",function(){
+      curItem=name; sinceTap=0; renderNow(); renderItemBtns();
+    });
+    box.appendChild(b);
+  });
+}
+
+/* ═══════════ 相機 ═══════════ */
+var stream=null, facing="environment", camReady=false;
+function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; } }
+function startCam(){
+  camReady=false; $("shutter").disabled=true; stopCam();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari，且網址必須是 https。";
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:facing,width:{ideal:1920},height:{ideal:1440}},audio:false
+  }).then(function(st){
+    stream=st; var v=$("video"); v.srcObject=st; return v.play();
+  }).then(function(){
+    camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
+  }).catch(function(err){
+    var m=err&&err.name?err.name:"";
+    var msg="相機打不開："+(err&&err.message?err.message:m);
+    if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
+    if(m==="NotFoundError") msg="找不到相機裝置。";
+    $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
+  });
+}
+
+/* ═══════════ 浮水印 ═══════════ */
+function fmtTime(d){
+  var p=function(n){return (n<10?"0":"")+n;};
+  return d.getFullYear()+"."+p(d.getMonth()+1)+"."+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function fmtFile(d){
+  var p=function(n){return (n<10?"0":"")+n;};
+  return ""+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+"-"+
+    p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function stamp(cv,item,when){
+  var ctx=cv.getContext("2d"), W=cv.width, H=cv.height;
+  var u=Math.max(W,H)/1000, pad=22*u, lh=34*u, fs=25*u;
+  var font=getComputedStyle(document.body).fontFamily;
+  var rows=[["維運區域: ",S.area||"—"],["拍攝時間: ",fmtTime(when)],
+            ["維運內容: ",S.work||"—"],["檢查項目: ",item||"—"]];
+  ctx.font="700 "+fs+"px "+font;
+  var wMax=0;
+  rows.forEach(function(r){ wMax=Math.max(wMax,ctx.measureText(r[0]+r[1]).width); });
+  var titleH=42*u;
+  var boxW=Math.min(wMax+pad*2,W-24*u), boxH=titleH+lh*rows.length+pad*1.4;
+  var x=18*u, y=H-boxH-18*u;
+  ctx.fillStyle="rgba(255,255,255,.86)"; roundRect(ctx,x,y,boxW,boxH,10*u); ctx.fill();
+  ctx.fillStyle="rgba(31,94,168,.92)"; roundRect(ctx,x,y,boxW,titleH,10*u); ctx.fill();
+  ctx.fillStyle="#fff"; ctx.font="800 "+(24*u)+"px "+font; ctx.textBaseline="middle";
+  ctx.fillText("維運記錄",x+pad,y+titleH/2);
+  ctx.textBaseline="alphabetic";
+  var ty=y+titleH+pad*0.55+fs;
+  rows.forEach(function(r){
+    ctx.font="700 "+fs+"px "+font;
+    ctx.fillStyle="#1f3a52"; ctx.fillText(r[0],x+pad,ty);
+    var kw=ctx.measureText(r[0]).width;
+    ctx.fillStyle="#14181B"; ctx.fillText(r[1],x+pad+kw,ty);
+    ty+=lh;
+  });
+  return cv;
+}
+
+/* ═══════════ AI ═══════════ */
+var model=null;
+function setNote(el,html,cls){
+  el.className="note"+(cls?" "+cls:""); el.innerHTML=html; el.classList.remove("hidden");
+}
+function loadModel(url){
+  url=(url||"").trim();
+  if(!url){ setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）"); return Promise.resolve(false); }
+  if(url.slice(-1)!=="/") url+="/";
+  if(typeof tmImage==="undefined"){
+    setNote($("modelState"),"<b>狀態：</b>辨識程式庫沒下載到（可能離線）。手動選項目仍可正常使用。","warn");
+    return Promise.resolve(false);
+  }
+  setNote($("modelState"),"<b>狀態：</b>載入中…");
+  return tmImage.load(url+"model.json",url+"metadata.json").then(function(m){
+    model=m; S.model=url; writeJSON(SET_KEY,S);
+    var labels=(m.getClassLabels?m.getClassLabels():[])||[];
+    var known=labels.filter(function(l){return allItems().indexOf(l)>=0;});
+    var msg="<b>狀態：</b>已載入 ✓ 類別："+esc(labels.join("、"));
+    if(!known.length){
+      setNote($("modelState"),msg+"<br><b>注意：</b>模型類別和檢查項目對不起來，辨識結果無法自動套用。請把兩邊文字改成一致。","warn");
+    }else setNote($("modelState"),msg,"ok");
+    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+    return true;
+  }).catch(function(err){
+    model=null;
+    setNote($("modelState"),"<b>狀態：</b>載入失敗 — "+errHtml(err)+
+      "<br>確認網址是 Teachable Machine「Upload my model」給的那串，且此刻能連網。手動選項目不受影響。","bad");
+    $("aiChip").classList.add("hidden");
+    return false;
+  });
+}
+/* ── 邊拍邊學 ──
+   拍照時把畫面的特徵向量留下來，配上你當下選的項目，就是一筆訓練資料。
+   訓練用 KNN：把樣本的特徵存起來，辨識時比對最接近的幾筆，不需要梯度訓練，
+   加樣本即時生效，也不會像重訓那樣把以前學過的洗掉。 */
+var FEAT=null, knn=null, knnMeta=null, featLoading=null;
+
+// 中央正方形裁切再縮到 224，訓練與辨識都走這個函式，前處理才會一致
+function to224(src){
+  var c=document.createElement("canvas"); c.width=224; c.height=224;
+  var w=src.width||src.videoWidth, h=src.height||src.videoHeight;
+  var s=Math.min(w,h), sx=Math.floor((w-s)/2), sy=Math.floor((h-s)/2);
+  c.getContext("2d").drawImage(src,sx,sy,s,s,0,0,224,224);
+  return c;
+}
+function libsReady(){ return typeof tf!=="undefined"&&typeof mobilenet!=="undefined"&&typeof knnClassifier!=="undefined"; }
+
+// MobileNet 權重約 16MB，只在真的要用時才下載，之後由 Service Worker 快取
+function loadFeat(){
+  if(FEAT) return Promise.resolve(FEAT);
+  if(featLoading) return featLoading;
+  if(!libsReady()) return Promise.reject(htmlErr("辨識程式庫沒下載到（可能離線）。第一次訓練需要網路，之後就能離線辨識。"));
+  featLoading=mobilenet.load({version:2,alpha:1.0}).then(function(m){
+    FEAT=m; featLoading=null; return m;
+  }).catch(function(e){ featLoading=null; throw e; });
+  return featLoading;
+}
+// 回傳 Float32Array；呼叫端不必管 tensor 釋放
+function embed(src){
+  return loadFeat().then(function(m){
+    var t=m.infer(to224(src),true);
+    var v=t.dataSync().slice(); t.dispose();
+    return v;
+  });
+}
+
+function labelsOf(ds){ return Object.keys(ds||{}); }
+// 存進 IndexedDB 要用純陣列，tensor 不能直接存
+function dsToPlain(ds){
+  var out={};
+  labelsOf(ds).forEach(function(l){ out[l]={shape:ds[l].shape,data:Array.from(ds[l].dataSync())}; });
+  return out;
+}
+function dsFromPlain(p){
+  var out={};
+  Object.keys(p||{}).forEach(function(l){
+    out[l]=tf.tensor2d(Float32Array.from(p[l].data),p[l].shape);
+  });
+  return out;
+}
+// 依樣本重建一個 KNN；cap 限制每類最多取幾筆，避免某一類樣本太多把投票蓋掉
+function buildKnn(samples,cap){
+  var byLabel={};
+  samples.forEach(function(s){
+    if(!s.emb||!s.label) return;
+    (byLabel[s.label]=byLabel[s.label]||[]).push(s);
+  });
+  var ds={},counts={};
+  Object.keys(byLabel).forEach(function(l){
+    var arr=byLabel[l];
+    if(cap&&arr.length>cap) arr=arr.slice(arr.length-cap);   // 留最新的
+    var dim=arr[0].emb.length, buf=new Float32Array(arr.length*dim);
+    arr.forEach(function(s,i){ buf.set(s.emb,i*dim); });
+    ds[l]=tf.tensor2d(buf,[arr.length,dim]);
+    counts[l]=arr.length;
+  });
+  var c=knnClassifier.create();
+  if(Object.keys(ds).length) c.setClassifierDataset(ds);
+  return {clf:c,counts:counts};
+}
+function pickK(counts){
+  var min=Infinity;
+  Object.keys(counts).forEach(function(l){ if(counts[l]<min) min=counts[l]; });
+  if(!isFinite(min)) return 1;
+  return Math.max(1,Math.min(10,min));
+}
+
+function loadKnn(){
+  return kvGet("knn").then(function(saved){
+    if(!saved||!saved.ds||!libsReady()) return false;
+    try{
+      knn=knnClassifier.create();
+      knn.setClassifierDataset(dsFromPlain(saved.ds));
+      knnMeta=saved.meta||{};
+      return true;
+    }catch(e){ knn=null; knnMeta=null; return false; }
+  }).catch(function(){ return false; });
+}
+
+function classify(cv){
+  if(knn) return knnPredict(cv);
+  if(!model) return Promise.resolve(null);
+  return model.predict(cv).then(function(p){
+    if(!p||!p.length) return null;
+    p.sort(function(a,b){return b.probability-a.probability;});
+    return {label:p[0].className,prob:p[0].probability};
+  }).catch(function(){ return null; });
+}
+function knnPredict(cv){
+  return embed(cv).then(function(v){
+    var t=tf.tensor2d(v,[1,v.length]);
+    return knn.predictClass(t,(knnMeta&&knnMeta.k)||3).then(function(r){
+      t.dispose();
+      var conf=r.confidences?r.confidences[r.label]:0;
+      return {label:r.label,prob:conf};
+    }).catch(function(e){ t.dispose(); throw e; });
+  }).catch(function(){ return null; });
+}
+/* 樣本只留 224×224 縮圖（約 8KB），不留原圖。
+   特徵向量等到 MobileNet 有載入時才算——離線拍的照片之後照樣能補上。 */
+var sinceTap=0;
+function keepSample(c224,label,when){
+  if(!label) return Promise.resolve();
+  var rec={label:label,time:when.toISOString(),sinceTap:sinceTap,emb:null,
+    who:whoName(),synced:false};
+  sinceTap++;
+  return new Promise(function(res){ c224.toBlob(res,"image/jpeg",0.8); }).then(function(thumb){
+    if(!thumb) return;
+    rec.thumb=thumb;
+    if(!FEAT) return sampAdd(rec);
+    return embed(c224).then(function(v){ rec.emb=v; return sampAdd(rec); })
+      .catch(function(){ return sampAdd(rec); });
+  }).catch(function(){});
+}
+function blobToImg(blob){
+  if(typeof createImageBitmap==="function") return createImageBitmap(blob);
+  return new Promise(function(res,rej){
+    var u=URL.createObjectURL(blob), im=new Image();
+    im.onload=function(){ URL.revokeObjectURL(u); res(im); };
+    im.onerror=function(){ URL.revokeObjectURL(u); rej(new Error("縮圖讀取失敗")); };
+    im.src=u;
+  });
+}
+// 補算還沒有特徵向量的樣本，onStep 回報進度
+function fillEmbeddings(samples,onStep){
+  var todo=samples.filter(function(s){ return !s.emb&&s.thumb; });
+  if(!todo.length) return Promise.resolve(0);
+  return loadFeat().then(function(){
+    var i=0;
+    return todo.reduce(function(chain,s){
+      return chain.then(function(){
+        return blobToImg(s.thumb).then(function(im){
+          var c=document.createElement("canvas"); c.width=224; c.height=224;
+          c.getContext("2d").drawImage(im,0,0,224,224);
+          if(im.close) im.close();
+          var t=FEAT.infer(c,true);
+          s.emb=t.dataSync().slice(); t.dispose();
+          return sampPut(s);
+        }).catch(function(){}).then(function(){
+          i++; if(onStep&&i%10===0) onStep(i,todo.length);
+        });
+      });
+    },Promise.resolve()).then(function(){ return todo.length; });
+  });
+}
+/* ── 多人共同訓練 ──
+   各自的手機把「特徵向量＋項目」打包成 JSON 丟到 NAS 的 _train，只新增不覆蓋，
+   所以幾個人同時上傳不會互相蓋掉。誰要訓練，就先把還沒合併過的檔案抓下來一起算。
+   只送特徵向量，不送照片與縮圖。 */
+var FEAT_VER="mobilenet-v2-a1.0-224";        // 特徵演算法版本，對不上就不能混用
+function trainDir(){ return NAS_ROOT+"/_train"; }
+
+function whoName(){ return safeFolder(S.who)||"未具名"; }
+
+// 版本號寫死容易跟實際 DSM 對不上，改成跟 NAS 問
+var apiVerCache=null;
+function apiVers(sid){
+  if(apiVerCache) return Promise.resolve(apiVerCache);
+  var want="SYNO.FileStation.List,SYNO.FileStation.Download,SYNO.FileStation.Upload";
+  return fetch(apiUrl("query.cgi","api=SYNO.API.Info&version=1&method=query&query="+
+      encodeURIComponent(want)+"&_sid="+encodeURIComponent(sid)))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      var d=(j&&j.success&&j.data)||{};
+      var pick=function(n,dflt){
+        return (d[n]&&d[n].maxVersion)?Math.min(d[n].maxVersion,dflt):dflt;
+      };
+      apiVerCache={list:pick("SYNO.FileStation.List",2),
+        down:pick("SYNO.FileStation.Download",2),
+        up:pick("SYNO.FileStation.Upload",2)};
+      return apiVerCache;
+    })
+    .catch(function(){ apiVerCache={list:2,down:2,up:2}; return apiVerCache; });
+}
+
+function pushSamples(sid){
+  // 共用樣本一定要知道是誰貢獻的，否則訓練報告分不出是誰的資料有問題
+  if(!safeFolder(S.who)) return Promise.resolve({sent:0,noName:true});
+  return sampAll().then(function(a){
+    var todo=a.filter(function(s){ return s.emb&&!s.synced; });
+    if(!todo.length) return {sent:0};
+    var batch={v:1,feat:FEAT_VER,who:whoName(),time:new Date().toISOString(),
+      items:todo.map(function(s){
+        return {label:s.label,emb:Array.from(s.emb),sinceTap:s.sinceTap||0,time:s.time};
+      })};
+    var name=safeFolder(whoName())+"__"+
+      new Date().toISOString().replace(/[:.]/g,"-")+"__"+
+      Math.random().toString(36).slice(2,8)+".json";
+    var blob=new Blob([JSON.stringify(batch)],{type:"application/json"});
+    return apiVers(sid).then(function(v){
+      var fd=new FormData();
+      fd.append("api","SYNO.FileStation.Upload");
+      fd.append("version",String(v.up));
+      fd.append("method","upload");
+      fd.append("path",trainDir());
+      fd.append("create_parents","true");
+      fd.append("overwrite","true");
+      fd.append("_sid",sid);
+      fd.append("file",blob,name);
+      return fetch(apiUrl("entry.cgi","_sid="+encodeURIComponent(sid)),
+        {method:"POST",body:fd});
+    }).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      // 標記已送出，下次不重複上傳
+      return todo.reduce(function(c,s){
+        return c.then(function(){ s.synced=true; return sampPut(s); });
+      },Promise.resolve()).then(function(){ return {sent:todo.length}; });
+    });
+  });
+}
+
+function listBatches(sid){
+  return apiVers(sid).then(function(v){
+    return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.List&version="+v.list+
+      "&method=list&folder_path="+encodeURIComponent(trainDir())+
+      "&_sid="+encodeURIComponent(sid)));
+  }).then(function(r){ return r.json(); })
+    .then(function(j){
+      // 資料夾還不存在＝還沒有人上傳過，不是錯誤
+      if(!j.success) return [];
+      return ((j.data&&j.data.files)||[]).filter(function(f){
+        return !f.isdir&&/\.json$/i.test(f.name||"");
+      });
+    }).catch(function(){ return []; });
+}
+
+function fetchBatch(sid,path){
+  return apiVers(sid).then(function(v){
+    return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.Download&version="+v.down+
+      "&method=download&mode=download&path="+encodeURIComponent(path)+
+      "&_sid="+encodeURIComponent(sid)));
+  }).then(function(r){
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return r.text();
+  }).then(function(t){ return JSON.parse(t); });
+}
+
+/* 只抓沒合併過的檔案。回傳合併結果與被拒絕的原因，讓使用者看得到問題。 */
+function pullShared(sid,onNote){
+  var say=onNote||function(){};
+  var merged=null, mine=whoName();
+  return kvGet("merged").then(function(m){
+    merged=m||[];
+    say("查看 NAS 上的共用樣本…");
+    return listBatches(sid);
+  }).then(function(files){
+    var todo=files.filter(function(f){ return merged.indexOf(f.name)<0; });
+    if(!todo.length) return {added:0,files:0,skipped:[],people:{}};
+    var added=0, skipped=[], people={};
+    return todo.reduce(function(chain,f,i){
+      return chain.then(function(){
+        say("下載共用樣本 "+(i+1)+" / "+todo.length+"…");
+        return fetchBatch(sid,f.path).then(function(b){
+          if(!b||b.feat!==FEAT_VER){
+            skipped.push(f.name+"（特徵版本不符）"); return;
+          }
+          var who=safeFolder(b.who)||"未具名";
+          // 自己上傳的不用再收回來，本機已經有了
+          if(who===mine){ merged.push(f.name); return; }
+          var recs=(b.items||[]).filter(function(it){ return it&&it.label&&it.emb; })
+            .map(function(it){
+              return {who:who,label:it.label,emb:Float32Array.from(it.emb),
+                sinceTap:it.sinceTap||0,time:it.time,file:f.name};
+            });
+          return shAddMany(recs).then(function(n){
+            added+=n; people[who]=(people[who]||0)+n; merged.push(f.name);
+          });
+        }).catch(function(e){ skipped.push(f.name+"（"+errText(e)+"）"); });
+      });
+    },Promise.resolve()).then(function(){
+      return kvSet("merged",merged).then(function(){
+        return {added:added,files:todo.length,skipped:skipped,people:people};
+      });
+    });
+  }).catch(function(){ return {added:0,files:0,skipped:[],people:{}}; });
+}
+
+var PER_CLASS_CAP=300;
+
+// 每類抽 20% 當考卷，用剩下的 80% 建模型去考，答對率才是真的辨識率。
+// 樣本太少的類別不抽考卷（抽走就沒得學了），但會在報告裡標出來。
+function holdoutEval(samples){
+  var byLabel={};
+  samples.forEach(function(s){ if(s.emb&&s.label) (byLabel[s.label]=byLabel[s.label]||[]).push(s); });
+  var train=[],test=[],thin=[];
+  Object.keys(byLabel).forEach(function(l){
+    var arr=byLabel[l];
+    if(arr.length<5){ thin.push(l+" "+arr.length+" 張"); train=train.concat(arr); return; }
+    var n=Math.max(1,Math.round(arr.length*0.2));
+    // 取尾端當考卷：最接近現在的拍攝條件，比隨機抽更接近實際使用
+    test=test.concat(arr.slice(arr.length-n));
+    train=train.concat(arr.slice(0,arr.length-n));
+  });
+  if(!test.length||Object.keys(byLabel).length<2)
+    return Promise.resolve({skipped:true,thin:thin});
+
+  var built=buildKnn(train,PER_CLASS_CAP), k=pickK(built.counts);
+  var right=0, per={}, byWho={};
+  return test.reduce(function(chain,s){
+    return chain.then(function(){
+      var t=tf.tensor2d(s.emb,[1,s.emb.length]);
+      return built.clf.predictClass(t,k).then(function(r){
+        t.dispose();
+        var w=s.who||"未具名";
+        per[s.label]=per[s.label]||{n:0,ok:0};
+        byWho[w]=byWho[w]||{n:0,ok:0};
+        per[s.label].n++; byWho[w].n++;
+        if(r.label===s.label){ right++; per[s.label].ok++; byWho[w].ok++; }
+      }).catch(function(){ t.dispose(); });
+    });
+  },Promise.resolve()).then(function(){
+    built.clf.dispose();
+    return {skipped:false,acc:right/test.length,n:test.length,
+      per:per,byWho:byWho,thin:thin};
+  });
+}
+
+function trainKnn(onNote){
+  var say=onNote||function(){};
+  var all=null, pull=null;
+  say("讀取樣本…");
+  return sampAll().then(function(a){
+    if(!a.length) return 0;
+    say("計算特徵（第一次要下載辨識模型，約 16MB）…");
+    return fillEmbeddings(a,function(i,n){ say("計算特徵 "+i+" / "+n+"…"); });
+  }).then(function(){
+    // 有帳號又有網路就順便把同仁的樣本抓下來一起練；抓不到不影響訓練
+    if(!NAS.user||!NAS.pass||navigator.onLine===false) return null;
+    return synoLogin().then(function(sid){
+      return pullShared(sid,say).then(function(r){
+        pull=r; return synoLogout(sid);
+      });
+    }).catch(function(){ return null; });
+  }).then(function(){
+    return Promise.all([sampAll(),shAll()]);
+  }).then(function(both){
+    var ex=S.exclude||[];
+    all=both[0].concat(both[1]).filter(function(s){
+      return s.emb&&s.label&&ex.indexOf(s.who||"未具名")<0;
+    });
+    if(!all.length)
+      throw htmlErr("還沒有訓練樣本。先去拍幾張照片，每個項目都拍到，再回來訓練。");
+    var labels={}; all.forEach(function(s){ labels[s.label]=1; });
+    if(Object.keys(labels).length<2)
+      throw htmlErr("至少要有 <b>2 個不同項目</b>的樣本才能訓練，不然沒有東西可以分辨。");
+    // 有人把項目名稱打得不一樣，會被當成不同類別，要講出來
+    var unknown=Object.keys(labels).filter(function(l){ return allItems().indexOf(l)<0; });
+    say("評估辨識率…");
+    return holdoutEval(all).then(function(ev){ ev.unknown=unknown; return ev; });
+  }).then(function(ev){
+    say("建立模型…");
+    var built=buildKnn(all,PER_CLASS_CAP);
+    var k=pickK(built.counts);
+    var plain=dsToPlain(built.clf.getClassifierDataset());
+    built.clf.dispose();
+    var whoCount={};
+    all.forEach(function(s){ var w=s.who||"未具名"; whoCount[w]=(whoCount[w]||0)+1; });
+    return kvGet("knn").then(function(prev){
+      // 先留上一版再覆蓋，訓練壞了才回得去
+      return (prev?kvSet("knn_prev",prev):Promise.resolve()).then(function(){
+        var meta={k:k,counts:built.counts,trained:new Date().toISOString(),
+          acc:ev.skipped?null:ev.acc,evalN:ev.skipped?0:ev.n,who:whoCount};
+        return kvSet("knn",{ds:plain,meta:meta});
+      });
+    }).then(function(){
+      return loadKnn();
+    }).then(function(){
+      return {counts:built.counts,k:k,ev:ev,who:whoCount,pull:pull};
+    });
+  });
+}
+function errText(e){ return (e&&e.message)?e.message:String(e); }
+
+/* ═══════════ 拍照回饋（震動／聲音） ═══════════
+   屋頂上戴手套、太陽直射，螢幕上的閃白根本看不到。震動和聲音是唯一
+   能在不看螢幕的情況下確認「有拍到」的回饋，失敗時更重要——否則整輪
+   拍完才發現少幾張，人已經下樓了。
+   聲音用 WebAudio 合成，不放音檔：離線一定有聲音，也不用多一次下載。 */
+var AC=null, fbLog=[];
+function canVib(){ return typeof navigator.vibrate==="function"; }
+function audioCtx(){
+  // iOS 只允許在使用者手勢裡建立／恢復音訊，所以這個函式一定要從 click 事件同步呼叫
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return null;
+    if(!AC) AC=new C();
+    if(AC.state==="suspended") AC.resume();
+    return AC;
+  }catch(e){ return null; }
+}
+function vib(pattern){
+  if(!S.vib||!canVib()) return false;
+  try{ navigator.vibrate(pattern); return true; }catch(e){ return false; }
+}
+// 短促的帶通白噪音＝「喀」。兩下分開放，聽起來像機械快門的簾幕開關。
+function click(ctx,at,freq,gain,decay){
+  var len=Math.max(1,Math.floor(ctx.sampleRate*0.03));
+  var buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+  for(var i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  var src=ctx.createBufferSource(); src.buffer=buf;
+  var bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=0.9;
+  var g=ctx.createGain(); g.gain.value=gain;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+  src.start(at);
+}
+function tone(ctx,at,freq,dur,gain){
+  var o=ctx.createOscillator(), g=ctx.createGain();
+  o.type="square"; o.frequency.value=freq;
+  g.gain.setValueAtTime(0,at);
+  g.gain.linearRampToValueAtTime(gain,at+0.01);
+  g.gain.setValueAtTime(gain,at+dur-0.02);
+  g.gain.linearRampToValueAtTime(0,at+dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(at); o.stop(at+dur+0.02);
+}
+function snd(kind){
+  if(!S.snd) return false;
+  var ctx=audioCtx(); if(!ctx) return false;
+  try{
+    var t=ctx.currentTime+0.001;
+    if(kind==="shot"){ click(ctx,t,1800,0.9,3); click(ctx,t+0.055,2600,0.5,6); }
+    else if(kind==="ai"){ tone(ctx,t,880,0.06,0.25); tone(ctx,t+0.09,1320,0.06,0.25); }
+    else { tone(ctx,t,320,0.18,0.35); tone(ctx,t+0.26,240,0.28,0.35); }
+    return true;
+  }catch(e){ return false; }
+}
+// 三種回饋刻意做得完全不一樣，口袋裡也分得出來是哪一種
+var FB={
+  shot:{vib:35,   snd:"shot"},   // 拍到了
+  ai  :{vib:[0,25,70,25], snd:"ai"},  // AI 把項目改掉了，看一眼
+  err :{vib:[0,220,120,220], snd:"err"}  // 沒存進去
+};
+function fb(kind){
+  var f=FB[kind]; if(!f) return;
+  var v=vib(f.vib), s=snd(f.snd);
+  fbLog.push({kind:kind,vib:v,snd:s});
+  if(fbLog.length>50) fbLog.shift();
+}
+
+/* ═══════════ 拍照 ═══════════ */
+var busy=false;
+function shoot(){
+  if(!camReady||busy) return;
+  busy=true; $("shutter").disabled=true;
+  var f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
+
+  var v=$("video"), cv=$("work");
+  var vw=v.videoWidth||1280, vh=v.videoHeight||960;
+  var scale=Math.min(1,1920/Math.max(vw,vh));
+  cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
+  cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
+  // 畫面已經凍結，這一刻才是「拍到了」。放在這裡而不是存檔成功之後，
+  // 是因為手感要跟按下去同步；存檔失敗另外有一組明顯不同的回饋。
+  // 也必須在 click 事件的同步流程裡，iOS 才肯解鎖音訊。
+  fb("shot");
+
+  // 浮水印還沒蓋上去，這時的畫面才適合留做訓練資料
+  var clean=to224(cv);
+
+  classify(cv).then(function(hit){
+    var overrode=false;
+    var asShown=hit?displayOf(hit.label):null;
+    if(hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
+      curItem=asShown; overrode=true;
+      fb("ai");
+    }
+    if(hit){
+      $("aiChip").classList.remove("hidden");
+      $("aiChip").textContent="AI："+(asShown||hit.label)+" "+Math.round(hit.prob*100)+"%";
+    }
+    var when=new Date();
+    stamp(cv,curItem,when);
+    return new Promise(function(res){ cv.toBlob(res,"image/jpeg",0.85); }).then(function(blob){
+      if(!blob) throw new Error("照片產生失敗");
+      return dbAdd({item:curItem,area:S.area,work:S.work,blob:blob,
+        time:when.toISOString(),uploaded:false});
+    }).then(function(){
+      // AI 改過的那張不留做訓練資料：那是模型自己的猜測，拿回去訓練只會把錯誤放大
+      if(overrode) return;
+      // 「其他」底下什麼都有，收進去只會讓模型到處誤判
+      if(!trainableItem(curItem)) return;
+      return keepSample(clean,keyOf(curItem),when);
+    });
+  }).then(function(){
+    return refreshPhotos();
+  }).catch(function(err){
+    fb("err");
+    alert("拍照失敗："+errText(err)+"\n\n若是空間不足，請先上傳或刪除部分照片。");
+  }).then(function(){
+    busy=false; $("shutter").disabled=!camReady;
+  });
+}
+
+/* ═══════════ 照片頁 ═══════════ */
+function refreshPhotos(){
+  return dbAll().then(function(list){
+    photos=list;
+    $("tabCount").textContent=String(photos.length);
+    renderNow(); renderItemBtns(); renderGrid(); updateQuota();
+  });
+}
+function thumbURL(p){
+  if(!urlCache[p.id]) urlCache[p.id]=URL.createObjectURL(p.blob);
+  return urlCache[p.id];
+}
+function renderGrid(){
+  var g=$("shotsGrid");
+  Object.keys(selected).forEach(function(k){
+    if(!photos.some(function(p){return String(p.id)===k;})) delete selected[k];
+  });
+  if(!photos.length){
+    g.classList.add("hidden"); $("shotsEmpty").classList.remove("hidden");
+    $("selBar").classList.add("hidden"); $("actSec").classList.add("hidden");
+    return;
+  }
+  g.classList.remove("hidden"); $("shotsEmpty").classList.add("hidden");
+  $("selBar").classList.remove("hidden"); $("actSec").classList.remove("hidden");
+  g.innerHTML="";
+  photos.forEach(function(p){
+    var d=document.createElement("div");
+    d.className="thumb"+(selected[p.id]?" sel":"");
+    var im=document.createElement("img"); im.src=thumbURL(p); im.alt=p.item; im.loading="lazy";
+    var mk=document.createElement("span"); mk.className="mark"; mk.textContent=selected[p.id]?"✓":"";
+    d.appendChild(im); d.appendChild(mk);
+    if(p.uploaded){ var up=document.createElement("span"); up.className="up"; up.textContent="✓ NAS"; d.appendChild(up); }
+    var cap=document.createElement("div"); cap.className="cap"; cap.textContent=p.item;
+    var sm=document.createElement("small"); sm.textContent=fmtTime(new Date(p.time));
+    cap.appendChild(sm); d.appendChild(cap);
+    d.addEventListener("click",function(){
+      if(selected[p.id]) delete selected[p.id]; else selected[p.id]=true;
+      renderGrid();
+    });
+    g.appendChild(d);
+  });
+  updateSelInfo();
+}
+function updateSelInfo(){
+  var n=selIds().length;
+  $("selInfo").textContent="已選 "+n+" / 共 "+photos.length;
+  $("btnUpload").disabled=!n; $("btnShare").disabled=!n; $("btnDel").disabled=!n;
+}
+
+/* ═══════════ 存到相簿（系統分享） ═══════════ */
+function shareSelected(){
+  var ids=selIds();
+  if(!ids.length) return;
+  var files=photos.filter(function(p){return ids.indexOf(p.id)>=0;}).map(function(p){
+    return new File([p.blob],fileNameOf(p),{type:"image/jpeg"});
+  });
+  if(!navigator.canShare||!navigator.canShare({files:files})){
+    setNote($("actState"),
+      "<b>這個瀏覽器不支援分享圖片檔。</b>改用：長按單張照片 →「加入照片」／「下載圖片」，"+
+      "或改用上傳 NAS。iPhone 請確認是用 Safari 開啟。","bad");
+    return;
+  }
+  navigator.share({files:files}).then(function(){
+    setNote($("actState"),"<b>已送出 "+files.length+" 張到分享面板。</b>在面板選「儲存影像」即可存進相簿。","ok");
+  }).catch(function(err){
+    if(err&&err.name==="AbortError"){ $("actState").classList.add("hidden"); return; }
+    setNote($("actState"),"<b>分享失敗：</b>"+errHtml(err)+
+      "<br>一次選太多張容易失敗，試試一次 10 張以內。","bad");
+  });
+}
+function fileNameOf(p){
+  return fmtFile(new Date(p.time))+"_"+(p.item||"未分類")+".jpg";
+}
+
+/* ═══════════ Synology 上傳 ═══════════ */
+var SYNO_ERR={
+  100:"未知錯誤",101:"參數不正確",102:"找不到 API，確認網址是不是 NAS 的 DSM 位址",
+  103:"這個 API 方法不存在",105:"權限不足",106:"連線逾時",107:"連線被中斷",
+  400:"帳號或密碼錯誤",401:"帳號已停用",402:"權限不足",
+  403:"這個帳號開了二階段驗證，請填驗證碼",404:"二階段驗證碼錯誤或已過期",
+  406:"需要先設定 email",407:"IP 被 NAS 封鎖，請到 DSM 解除封鎖",408:"密碼已過期，請先到 DSM 改密碼",
+  119:"連線階段已失效，請再試一次",
+  1001:"上傳的參數不正確",1002:"上傳時發生錯誤",1003:"上傳被取消",
+  1805:"無法建立資料夾，確認路徑和寫入權限"
+};
+function synoErr(code){ return SYNO_ERR[code]||("錯誤碼 "+code); }
+
+/* ── 上傳目的地：固定值，使用者不可更改 ──
+   要換 NAS 位址或根目錄時改這兩行，其餘程式不必動。
+   NAS_URL 必須與本頁同源，否則瀏覽器會擋下上傳。 */
+var NAS_URL  = "https://yangchin.synology.me/pvapi/proxy.php";
+var NAS_ROOT = "/暘勤/99 維運上傳照片";
+
+function nasBase(){ return NAS_URL; }
+
+// 資料夾名稱不得含這些字元，否則 Synology 會拒絕或被誤判為路徑分隔
+function safeFolder(s){
+  return String(s==null?"":s).replace(/[\\\/:*?"<>|]/g,"_")
+    .replace(/^[.\s]+|[.\s]+$/g,"");
+}
+// 照片依維運區域分子資料夾，換案場只需改第 2 區的區域名稱
+function nasPath(){
+  var area=safeFolder(S.area);
+  return area ? NAS_ROOT+"/"+area : NAS_ROOT;
+}
+
+// 網址以 .php 結尾＝走 NAS 上的同源轉發程式，端點用查詢參數指定；
+// 否則直接打 DSM 的 /webapi/。
+function apiUrl(cgi,qs){
+  var base=nasBase();
+  if(/\.php$/i.test(base))
+    return base+"?_cgi="+encodeURIComponent(cgi)+(qs?"&"+qs:"");
+  return base+"/webapi/"+cgi+(qs?"?"+qs:"");
+}
+
+// 分辨「連不到 NAS」與「連得到但被 CORS 擋」：
+// no-cors 請求不受 CORS 阻擋，只有網路層真的不通時才會失敗。
+function diagnose(){
+  return fetch(apiUrl("query.cgi","api=SYNO.API.Info&version=1&method=query"),
+    {mode:"no-cors"}).then(function(){ return "cors"; })
+    .catch(function(){ return "unreachable"; });
+}
+// 訊息會以 innerHTML 呈現，凡是使用者輸入或外部來源的字串都必須先轉義
+function esc(s){
+  return String(s==null?"":s).replace(/[&<>"']/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+// 自製訊息含排版標記，標記後由 errHtml() 直接採用；其餘錯誤一律當純文字轉義
+function htmlErr(msg){ var e=new Error(msg); e.html=true; return e; }
+function errHtml(e){ return (e&&e.html)?e.message:esc(errText(e)); }
+
+function sameOriginTarget(){
+  try{ return new URL(nasBase(),location.href).origin===location.origin; }
+  catch(e){ return false; }
+}
+
+function reachErr(kind){
+  if(kind!=="cors")
+    return htmlErr("連不到 NAS。確認網址正確、NAS 在線上，"+
+      "以及這支手機目前的網路（行動網路或 Wi-Fi）連得到它");
+
+  // 同源不可能被跨來源政策擋下，報成 CORS 只會把人帶往錯誤方向
+  if(sameOriginTarget())
+    return htmlErr("連得到伺服器，但請求沒有完成。<br>"+
+      "位址和這個頁面同源，所以<b>不是</b>跨網域問題。<br>"+
+      "請直接在瀏覽器開啟 <code>"+esc(nasBase())+
+      "?_cgi=query.cgi&amp;api=SYNO.API.Info&amp;version=1&amp;method=query</code>，"+
+      "看它回什麼——通常會指出轉發程式或 PHP 服務的問題");
+
+  return htmlErr("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。<br>"+
+    "這個頁面在 <code>"+esc(location.origin)+"</code>，"+
+    "NAS 網址卻設成 <code>"+esc(nasBase())+"</code>，兩者不同源（網域或連接埠不一樣）。<br>"+
+    "解法：改用這個頁面同網域下的轉發程式，或改從 NAS 上的網址開啟這個頁面");
+}
+function synoLogin(){
+  var body=new URLSearchParams({
+    api:"SYNO.API.Auth",version:"6",method:"login",
+    account:NAS.user||"",passwd:NAS.pass||"",session:"FileStation",format:"sid"
+  });
+  return fetch(apiUrl("auth.cgi"),{method:"POST",body:body})
+    .then(function(r){
+      if(!r.ok) throw new Error("NAS 回應 HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      return j.data.sid;
+    })
+    .catch(function(err){
+      if(err instanceof TypeError)
+        return diagnose().then(function(kind){ throw reachErr(kind); });
+      throw err;
+    });
+}
+function synoUpload(sid,p){
+  var fd=new FormData();
+  fd.append("api","SYNO.FileStation.Upload");
+  fd.append("version","2");
+  fd.append("method","upload");
+  fd.append("path",nasPath());
+  fd.append("create_parents","true");
+  fd.append("overwrite","true");
+  fd.append("_sid",sid);
+  fd.append("file",p.blob,fileNameOf(p));
+  return fetch(apiUrl("entry.cgi","_sid="+encodeURIComponent(sid)),{method:"POST",body:fd})
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      return true;
+    });
+}
+function synoLogout(sid){
+  var body=new URLSearchParams({api:"SYNO.API.Auth",version:"6",method:"logout",session:"FileStation",_sid:sid});
+  return fetch(apiUrl("auth.cgi"),{method:"POST",body:body}).catch(function(){});
+}
+
+var uploading=false;
+function uploadSelected(){
+  if(uploading) return;
+  var ids=selIds();
+  if(!ids.length) return;
+  if(navigator.onLine===false){
+    setNote($("actState"),"<b>目前沒有網路連線。</b>照片已經存在手機裡不會不見，"+
+      "回到有網路的地方再上傳就好。","warn");
+    return;
+  }
+  if(!NAS.user||!NAS.pass){
+    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 4 區填好再上傳。","warn");
+    return;
+  }
+  if(!safeFolder(S.area)){
+    setNote($("actState"),"<b>還沒填維運區域。</b>照片要依區域分資料夾，"+
+      "到設定頁第 2 區填好再上傳。","warn");
+    return;
+  }
+  var todo=photos.filter(function(p){return ids.indexOf(p.id)>=0;});
+  uploading=true; $("btnUpload").disabled=true;
+  setNote($("actState"),"<b>登入 NAS…</b>");
+
+  var okN=0, failN=0, firstErr="", sentSamples=0, sampleErr=false, noName=false;
+  synoLogin().then(function(sid){
+    var chain=Promise.resolve();
+    todo.forEach(function(p,i){
+      chain=chain.then(function(){
+        setNote($("actState"),"<b>上傳中 "+(i+1)+" / "+todo.length+"</b>　"+p.item);
+        return synoUpload(sid,p).then(function(){
+          okN++; p.uploaded=true; return dbPut(p);
+        }).catch(function(err){
+          failN++; if(!firstErr) firstErr=errHtml(err);
+        });
+      });
+    });
+    // 照片傳完，順手把新的訓練樣本也送上去給大家共用
+    return chain.then(function(){
+      setNote($("actState"),"<b>上傳訓練樣本…</b>");
+      return pushSamples(sid).then(function(r){
+        sentSamples=r.sent; noName=!!r.noName;
+      }).catch(function(){ sampleErr=true; });
+    }).then(function(){ return synoLogout(sid); });
+  }).then(function(){
+    return refreshPhotos();
+  }).then(function(){
+    var extra=sentSamples?"，另有 "+sentSamples+" 筆訓練樣本已共用":
+      noName?"。<b>訓練樣本沒有共用出去</b>——設定頁第 1 區還沒填「你的名字」，"+
+        "沒有名字就分不出是誰貢獻的。填好後下次上傳會一起送。":
+      (sampleErr?"（訓練樣本沒送成功，下次上傳會再試）":"");
+    if(failN===0) setNote($("actState"),"<b>上傳完成：</b>"+okN+" 張已送到 <code>"+esc(nasPath())+"</code>"+extra,"ok");
+    else setNote($("actState"),"<b>完成 "+okN+" 張，失敗 "+failN+" 張。</b><br>失敗原因："+firstErr,"warn");
+  }).catch(function(err){
+    setNote($("actState"),"<b>上傳中止：</b>"+errHtml(err),"bad");
+  }).then(function(){
+    uploading=false; updateSelInfo();
+  });
+}
+
+function testNas(){
+  if(!NAS.user||!NAS.pass){ setNote($("nasState"),"<b>請先填帳號和密碼。</b>","warn"); return; }
+  setNote($("nasState"),"<b>連線中…</b>");
+  synoLogin().then(function(sid){
+    setNote($("nasState"),"<b>連線成功 ✓</b> 帳號密碼正確，NAS 可以連到。","ok");
+    return synoLogout(sid);
+  }).catch(function(err){
+    setNote($("nasState"),"<b>連線失敗：</b>"+errHtml(err),"bad");
+  });
+}
+
+/* ═══════════ 儲存空間 ═══════════ */
+function mb(n){ return (n/1048576).toFixed(1)+" MB"; }
+function updateQuota(){
+  var used=0; photos.forEach(function(p){ used+=(p.blob&&p.blob.size)||0; });
+  if(!navigator.storage||!navigator.storage.estimate){
+    $("quotaText").textContent=photos.length+" 張照片，佔用 "+mb(used);
+    $("quotaBar").style.width="0";
+    return;
+  }
+  navigator.storage.estimate().then(function(est){
+    var quota=est.quota||0;
+    var pct=quota?Math.min(100,(used/quota)*100):0;
+    $("quotaText").textContent=photos.length+" 張照片，佔用 "+mb(used)+
+      (quota?("　/　這個瀏覽器可用 "+mb(quota)):"");
+    var bar=$("quotaBar");
+    bar.style.width=pct.toFixed(1)+"%";
+    bar.className=pct>70?"warn":"";
+  });
+}
+function initPersist(){
+  var el=$("persistNote");
+  if(!navigator.storage||!navigator.storage.persist){
+    setNote(el,"<b>提醒：</b>照片只存在這支手機的瀏覽器裡。清除瀏覽器資料就會消失，"+
+      "重要照片請當天上傳 NAS 或存進相簿。","warn");
+    return;
+  }
+  navigator.storage.persisted().then(function(has){
+    if(has){ setNote(el,"<b>已設為持久儲存 ✓</b> 系統不會自動清掉這些照片。不過清除瀏覽器資料仍會刪除。","ok"); return; }
+    return navigator.storage.persist().then(function(ok){
+      if(ok) setNote(el,"<b>已設為持久儲存 ✓</b> 系統不會自動清掉這些照片。","ok");
+      else setNote(el,"<b>提醒：</b>瀏覽器沒給持久儲存權限，空間不足時系統可能自動清掉照片。"+
+        "iPhone 上長時間沒開這個網頁也可能被清除。<b>請當天就上傳 NAS。</b>","warn");
+    });
+  });
+}
+
+/* ═══════════ 設定頁事件 ═══════════ */
+function renderPathPreview(){
+  var area=safeFolder(S.area);
+  $("pathPreview").textContent=area
+    ? nasPath()+"/"
+    : NAS_ROOT+"/（請先在第 2 區填維運區域）";
+}
+function renderOwnerSel(){
+  var sel=$("sOwner");
+  sel.innerHTML="";
+  ownerNames().forEach(function(n){
+    var o=document.createElement("option");
+    o.value=n; o.textContent=n; if(n===S.owner) o.selected=true;
+    sel.appendChild(o);
+  });
+}
+function renderItemsPreview(){
+  $("itemsPreview").textContent=curItems().join("、");
+}
+function fillForms(){
+  $("sArea").value=S.area; $("sWork").value=S.work;
+  $("sWho").value=S.who||""; $("sExclude").value=(S.exclude||[]).join("、");
+  $("sModel").value=S.model;
+  $("nUser").value=NAS.user;
+  $("nPass").value=NAS.remember?NAS.pass:"";
+  $("nRemember").checked=!!NAS.remember;
+  $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
+  renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
+}
+// 震動在 iOS Safari 上不存在，寧可先講明白，不要讓人以為是壞了
+function renderFbState(){
+  var msg=canVib()
+    ? "<b>這支手機支援震動。</b>"
+    : "<b>這支手機不支援震動</b>（iPhone 的 Safari 一律不支援，不是設定壞掉）。";
+  msg+="快門聲走媒體音量，"+
+       "iPhone 側邊靜音鍵切到靜音時不會出聲。";
+  setNote($("fbState"),msg,canVib()?"ok":"warn");
+}
+// 換業主＝換整組檢查項目，拍照頁要跟著重畫
+function applyOwner(name){
+  S.owner=ownerNames().indexOf(name)>=0?name:OWNERS[0].name;
+  var items=curItems();
+  if(items.indexOf(curItem)<0) curItem=items[0]||"";
+  renderItemsPreview(); renderNow(); renderItemBtns();
+}
+$("sOwner").addEventListener("change",function(){ applyOwner($("sOwner").value); });
+$("btnSaveWho").addEventListener("click",function(){
+  S.who=$("sWho").value.trim();
+  writeJSON(SET_KEY,S);
+  setNote($("whoState"),S.who
+    ? "<b>已儲存。</b>之後上傳的訓練樣本會標上「"+esc(S.who)+"」。"
+    : "<b>名字是空的。</b>訓練樣本不會共用出去，因為分不出是誰貢獻的。",
+    S.who?"ok":"warn");
+  renderSampState();
+});
+$("btnSaveSet").addEventListener("click",function(){
+  applyOwner($("sOwner").value);
+  S.area=$("sArea").value.trim(); S.work=$("sWork").value.trim();
+  writeJSON(SET_KEY,S);
+  renderPathPreview();
+  alert("已儲存。");
+});
+$("sArea").addEventListener("input",function(){
+  S.area=$("sArea").value.trim(); renderPathPreview();
+});
+// 回饋是拍照當下的手感，勾了就立刻生效並存起來，不用再按一次儲存
+$("sVib").addEventListener("change",function(){
+  S.vib=$("sVib").checked; writeJSON(SET_KEY,S); if(S.vib) vib(FB.shot.vib);
+});
+$("sSnd").addEventListener("change",function(){
+  S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
+});
+$("btnFbTest").addEventListener("click",function(){
+  // 三種依序放出來，讓人在案場前就先分清楚哪一種是失敗
+  fb("shot");
+  setTimeout(function(){ fb("ai"); },700);
+  setTimeout(function(){ fb("err"); },1500);
+});
+$("btnNasSave").addEventListener("click",function(){
+  NAS.user=$("nUser").value.trim();
+  NAS.pass=$("nPass").value;
+  NAS.remember=$("nRemember").checked;
+  writeJSON(NAS_KEY,{user:NAS.user,remember:NAS.remember,
+    pass:NAS.remember?NAS.pass:""});
+  setNote($("nasState"),NAS.remember
+    ? "<b>已儲存（含密碼）。</b>密碼是明文存在這支手機裡。"
+    : "<b>已儲存。</b>密碼沒有記住，這次開啟期間有效，重新整理後要再輸入一次。","ok");
+});
+$("btnNasTest").addEventListener("click",function(){
+  NAS.user=$("nUser").value.trim(); NAS.pass=$("nPass").value;
+  testNas();
+});
+$("btnLoadModel").addEventListener("click",function(){ loadModel($("sModel").value); });
+$("btnUnloadModel").addEventListener("click",function(){
+  model=null; S.model=""; writeJSON(SET_KEY,S); $("sModel").value="";
+  $("aiChip").classList.add("hidden");
+  setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
+});
+/* ── 邊拍邊學：設定頁 ── */
+function fmtCounts(c){
+  var ks=Object.keys(c||{});
+  if(!ks.length) return "（還沒有）";
+  ks.sort(function(a,b){ return c[b]-c[a]; });
+  return ks.map(function(l){ return esc(l)+" "+c[l]; }).join("、");
+}
+function renderSampState(){
+  return Promise.all([sampAll(),shAll()]).then(function(both){
+    var a=both[0], sh=both[1];
+    var c={}; a.concat(sh).forEach(function(s){ c[s.label]=(c[s.label]||0)+1; });
+    var enough=Object.keys(c).filter(function(l){ return c[l]>=30; }).length;
+    var body="<b>訓練樣本：</b>共 "+(a.length+sh.length)+" 張　"+fmtCounts(c);
+    if(sh.length){
+      var w={}; sh.forEach(function(s){ var k=s.who||"未具名"; w[k]=(w[k]||0)+1; });
+      body+="<br><b>其中同仁共用：</b>"+sh.length+" 張（"+fmtCounts(w)+"）";
+    }
+    var unsent=a.filter(function(s){ return s.emb&&!s.synced; }).length;
+    if(unsent&&!safeFolder(S.who))
+      body+="<br><b>"+unsent+" 張沒辦法共用</b>：請先在第 1 區填「你的名字」。";
+    else if(unsent)
+      body+="<br>"+unsent+" 張還沒共用出去，下次按「上傳 NAS」時會一起送。";
+    if(knnMeta&&knnMeta.trained){
+      body+="<br><b>目前使用：</b>手機上訓練的模型（"+
+        knnMeta.trained.slice(0,10)+"）"+
+        (knnMeta.acc!=null?"，實測辨識率 "+Math.round(knnMeta.acc*100)+"%":"");
+    }
+    var cls=(a.length+sh.length)&&enough>=2?"ok":null;
+    if(!a.length&&!sh.length) body+="<br>去拍照吧，拍了就會自動累積。";
+    else if(enough<2) body+="<br>建議每個項目都累積到 30 張以上再訓練，現在有 "+enough+" 個項目達標。";
+    setNote($("sampState"),body,cls);
+    return a.length;
+  }).catch(function(){ setNote($("sampState"),"<b>訓練樣本：</b>讀取失敗","warn"); });
+}
+var training=false;
+$("btnTrain").addEventListener("click",function(){
+  if(training) return;
+  S.exclude=$("sExclude").value.split(/[,，、]/).map(function(x){return x.trim();}).filter(Boolean);
+  S.who=$("sWho").value.trim();
+  writeJSON(SET_KEY,S);
+  training=true; $("btnTrain").disabled=true;
+  setNote($("trainState"),"<b>準備中…</b>");
+  trainKnn(function(msg){ setNote($("trainState"),"<b>"+esc(msg)+"</b>"); })
+    .then(function(r){
+      var ev=r.ev, html="<b>訓練完成 ✓</b>　"+fmtCounts(r.counts);
+      if(ev.skipped){
+        html+="<br>樣本還太少，沒辦法留出考卷估辨識率。多拍一些再訓練一次會比較有把握。";
+      }else{
+        var pct=Math.round(ev.acc*100);
+        html+="<br><b>實測辨識率 "+pct+"%</b>（拿 "+ev.n+" 張沒學過的照片考出來的）";
+        var rows=Object.keys(ev.per).map(function(l){
+          var p=ev.per[l]; return esc(l)+" "+p.ok+"/"+p.n;
+        });
+        if(rows.length) html+="<br><span style=\"font-size:12px\">各項目："+rows.join("、")+"</span>";
+        if(pct<70) html+="<br><b>這個準確度還不夠</b>，拍照時仍請自己點項目，別依賴它。";
+      }
+      if(ev.byWho&&Object.keys(ev.byWho).length>1){
+        var ws=Object.keys(ev.byWho).map(function(w){
+          var p=ev.byWho[w], pc=p.n?Math.round(p.ok/p.n*100):0;
+          return esc(w)+" "+p.ok+"/"+p.n+"（"+pc+"%）";
+        });
+        html+="<br><b>各人答對率：</b>"+ws.join("、");
+        var bad=Object.keys(ev.byWho).filter(function(w){
+          var p=ev.byWho[w]; return p.n>=5&&p.ok/p.n<0.5;
+        });
+        if(bad.length)
+          html+="<br><b>"+esc(bad.join("、"))+" 的樣本答對率偏低</b>，"+
+            "可能是拍攝時忘記點項目按鈕。可在上面「排除這些人的樣本」填入後重新訓練比較看看。";
+      }
+      if(r.who&&Object.keys(r.who).length>1)
+        html+="<br><span style=\"font-size:12px\">參與訓練："+fmtCounts(r.who)+"</span>";
+      if(r.pull&&r.pull.added)
+        html+="<br><span style=\"font-size:12px\">本次從 NAS 併入 "+r.pull.added+" 筆共用樣本</span>";
+      if(r.pull&&r.pull.skipped&&r.pull.skipped.length)
+        html+="<br><b>有檔案沒併進來：</b>"+esc(r.pull.skipped.join("、"));
+      if(ev.unknown&&ev.unknown.length)
+        html+="<br><b>這些項目名稱和你的清單對不起來：</b>"+esc(ev.unknown.join("、"))+
+          "。同仁的檢查項目文字要一致，否則同一個東西會被當成兩類。";
+      if(ev.thin&&ev.thin.length)
+        html+="<br><span style=\"font-size:12px\">樣本過少沒列入評估："+esc(ev.thin.join("、"))+"</span>";
+      setNote($("trainState"),html,ev.skipped||ev.acc>=0.7?"ok":"warn");
+      $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+      setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓","ok");
+      return renderSampState();
+    })
+    .catch(function(err){
+      setNote($("trainState"),"<b>訓練失敗：</b>"+errHtml(err),"bad");
+    })
+    .then(function(){ training=false; $("btnTrain").disabled=false; });
+});
+$("btnRollback").addEventListener("click",function(){
+  kvGet("knn_prev").then(function(prev){
+    if(!prev){ setNote($("trainState"),"<b>沒有上一版可以回。</b>","warn"); return; }
+    return kvSet("knn",prev).then(function(){ return kvDel("knn_prev"); })
+      .then(loadKnn).then(function(){
+        setNote($("trainState"),"<b>已回到上一版 ✓</b>"+
+          (prev.meta&&prev.meta.trained?"（"+prev.meta.trained.slice(0,10)+" 訓練的）":""),"ok");
+        return renderSampState();
+      });
+  }).catch(function(err){ setNote($("trainState"),"<b>回復失敗：</b>"+errHtml(err),"bad"); });
+});
+$("btnWipeSamples").addEventListener("click",function(){
+  if(!confirm("清空全部訓練樣本？\n\n包含從 NAS 併入的同仁樣本。已經訓練好的辨識能力會一起失效。\n照片本身與 NAS 上的共用檔案不受影響（下次訓練會重新抓回來）。")) return;
+  Promise.all([sampClear(),shClear(),kvDel("knn"),kvDel("knn_prev"),kvDel("merged")]).then(function(){
+    knn=null; knnMeta=null;
+    $("aiChip").classList.add("hidden");
+    setNote($("trainState"),"<b>已清空。</b>再拍照就會重新開始累積。","ok");
+    setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
+    return renderSampState();
+  });
+});
+$("btnRefreshQuota").addEventListener("click",updateQuota);
+$("btnWipe").addEventListener("click",function(){
+  if(!photos.length){ alert("沒有照片。"); return; }
+  if(!confirm("刪除全部 "+photos.length+" 張照片？\n沒上傳或沒存相簿的會永久消失。")) return;
+  dbDel(photos.map(function(p){return p.id;})).then(function(){
+    Object.keys(urlCache).forEach(function(k){ URL.revokeObjectURL(urlCache[k]); });
+    urlCache={}; selected={}; return refreshPhotos();
+  });
+});
+
+/* ═══════════ 照片頁事件 ═══════════ */
+$("btnSelAll").addEventListener("click",function(){
+  photos.forEach(function(p){ selected[p.id]=true; }); renderGrid();
+});
+$("btnSelNone").addEventListener("click",function(){ selected={}; renderGrid(); });
+$("btnSelNotUp").addEventListener("click",function(){
+  selected={}; photos.forEach(function(p){ if(!p.uploaded) selected[p.id]=true; }); renderGrid();
+});
+$("btnShare").addEventListener("click",shareSelected);
+$("btnUpload").addEventListener("click",uploadSelected);
+$("btnDel").addEventListener("click",function(){
+  var ids=selIds(); if(!ids.length) return;
+  var notUp=photos.filter(function(p){return ids.indexOf(p.id)>=0&&!p.uploaded;}).length;
+  var msg="刪除選取的 "+ids.length+" 張？";
+  if(notUp) msg+="\n其中 "+notUp+" 張還沒上傳 NAS，刪掉就沒了。";
+  if(!confirm(msg)) return;
+  dbDel(ids).then(function(){
+    ids.forEach(function(id){
+      if(urlCache[id]){ URL.revokeObjectURL(urlCache[id]); delete urlCache[id]; }
+      delete selected[id];
+    });
+    return refreshPhotos();
+  });
+});
+
+/* ═══════════ 分頁 ═══════════ */
+Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
+  t.addEventListener("click",function(){
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
+    t.classList.add("on");
+    Array.prototype.forEach.call(document.querySelectorAll(".page"),function(p){p.classList.remove("on");});
+    $(t.dataset.p).classList.add("on");
+    if(t.dataset.p==="pSet") updateQuota();
+  });
+});
+
+/* ═══════════ 離線快取 ═══════════ */
+var APP_VERSION="2026-09-21a";
+$("ver").textContent="版本 "+APP_VERSION;
+
+function initSW(){
+  var el=$("swState");
+  if(!("serviceWorker" in navigator)){
+    setNote(el,"<b>這個瀏覽器不支援離線快取。</b>沒網路時 App 會打不開。","warn");
+    return;
+  }
+  if(!window.isSecureContext){
+    setNote(el,"<b>目前不是 https，離線快取無法啟用。</b>"+
+      "要用 https 開啟這個網址，沒網路時才開得起來（相機也需要 https）。","bad");
+    return;
+  }
+  navigator.serviceWorker.register("sw.js").then(function(reg){
+    if(navigator.serviceWorker.controller)
+      setNote(el,"<b>已存進手機 ✓</b> 沒網路也能開啟拍照。上傳 NAS 仍需連線。","ok");
+    else
+      setNote(el,"<b>正在存入手機…</b>完成後重新整理一次，之後沒網路也能開。","warn");
+
+    reg.addEventListener("updatefound",function(){
+      var w=reg.installing;
+      if(!w) return;
+      w.addEventListener("statechange",function(){
+        if(w.state==="installed"&&navigator.serviceWorker.controller)
+          setNote(el,"<b>有新版本 ✓</b> 關掉這個頁面再重開就會換成新版。","ok");
+      });
+    });
+  }).catch(function(err){
+    setNote(el,"<b>離線快取啟用失敗：</b>"+errHtml(err)+
+      "<br>App 仍可使用，但沒網路時打不開。","bad");
+  });
+}
+$("btnSwReset").addEventListener("click",function(){
+  if(!confirm("清掉快取並重新下載最新版？\n照片和設定都不會動到。")) return;
+  setNote($("swState"),"<b>清除中…</b>");
+  var jobs=[];
+  if(window.caches) jobs.push(caches.keys().then(function(ks){
+    return Promise.all(ks.map(function(k){ return caches.delete(k); }));
+  }));
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)
+    jobs.push(navigator.serviceWorker.getRegistrations().then(function(rs){
+      return Promise.all(rs.map(function(r){ return r.unregister(); }));
+    }));
+  Promise.all(jobs).catch(function(){}).then(function(){
+    location.reload(true);
+  });
+});
+
+$("btnSwUpdate").addEventListener("click",function(){
+  if(!navigator.serviceWorker||!navigator.serviceWorker.getRegistration) return;
+  setNote($("swState"),"<b>檢查中…</b>");
+  navigator.serviceWorker.getRegistration().then(function(reg){
+    if(!reg){ initSW(); return; }
+    return reg.update().then(function(){
+      setNote($("swState"),"<b>已是最新版 ✓</b> 沒網路也能開啟拍照。","ok");
+    });
+  }).catch(function(err){
+    setNote($("swState"),"<b>檢查失敗：</b>"+errHtml(err)+"（可能目前沒網路）","warn");
+  });
+});
+
+/* ═══════════ 啟動 ═══════════ */
+$("shutter").addEventListener("click",shoot);
+$("btnFlip").addEventListener("click",function(){
+  facing=(facing==="environment")?"user":"environment"; startCam();
+});
+
+// 藍牙快門遙控器對手機而言是鍵盤，按鍵因廠牌而異，常見的都收。
+// 手機本身的音量鍵不會產生鍵盤事件，網頁無法攔截。
+var SHUTTER_KEYS={"Enter":1," ":1,"Spacebar":1,"ArrowUp":1,"ArrowDown":1,
+  "AudioVolumeUp":1,"AudioVolumeDown":1,"VolumeUp":1,"VolumeDown":1,"MediaPlayPause":1};
+document.addEventListener("keydown",function(e){
+  if(e.repeat||e.metaKey||e.ctrlKey||e.altKey) return;
+  if(!SHUTTER_KEYS[e.key]) return;
+  var t=e.target;
+  if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return;
+  if(t&&t.tagName==="BUTTON"&&t!==$("shutter")) return;   // 讓鍵盤仍能操作其他按鈕
+  if(!$("pShoot").classList.contains("on")) return;
+  e.preventDefault();
+  shoot();
+});
+window.addEventListener("pagehide",stopCam);
+
+fillForms();
+renderNow(); renderItemBtns();
+refreshPhotos();
+initPersist();
+initSW();
+startCam();
+
+// 手機上訓練過的模型優先；沒有才回頭用 Teachable Machine 網址
+loadKnn().then(function(has){
+  if(has){
+    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+    setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓"+
+      (knnMeta&&knnMeta.acc!=null?"（實測辨識率 "+Math.round(knnMeta.acc*100)+"%）":""),"ok");
+  }else if(S.model) loadModel(S.model);
+  return renderSampState();
+});
+
+window.__pv={
+  // 自動化測試用：把固定的上傳目的地指向測試伺服器
+  _setNasUrl:function(u){ NAS_URL=u; },
+  get nasUrl(){ return NAS_URL; }, get nasPath(){ return nasPath(); },
+  get knnMeta(){ return knnMeta; }, get hasKnn(){ return !!knn; },
+  samples:sampAll, train:trainKnn, _to224:to224,
+  _keepSample:keepSample, _clearSamples:sampClear, _kvGet:kvGet, classify:classify,
+  _shared:shAll, _shClear:shClear, _push:pushSamples, _pull:pullShared,
+  get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
+  _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
+  _login:synoLogin, get featVer(){ return FEAT_VER; },
+  _safeFolder:safeFolder,
+  _fb:fb, _canVib:canVib, _fbPattern:FB,
+  get fbLog(){ return fbLog.slice(); }, _fbClear:function(){ fbLog.length=0; },
+  stamp:stamp, get photos(){return photos;}, get set(){return S;},
+  get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
+  setCur:function(v){ curItem=v; renderNow(); renderItemBtns(); },
+  _shoot:shoot, _refresh:refreshPhotos, _fileName:fileNameOf, _synoErr:synoErr
+};
+})();
+</script>
+</body>
+</html>
