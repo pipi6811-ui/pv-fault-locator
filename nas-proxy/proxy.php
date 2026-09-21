@@ -21,6 +21,42 @@ define('DSM_BASE', 'http://localhost:5000');
 
 $ALLOWED = array('auth.cgi', 'entry.cgi', 'query.cgi');
 
+/*
+ * 拍照頁改由 GitHub Pages 提供之後，它跟這支程式已經不是同源了，瀏覽器會
+ * 擋住回應——即使請求其實有送到、檔案也真的上傳成功，網頁仍讀不到結果。
+ *
+ * 這裡明確列出准許讀取回應的來源。不要改成 *：那等於任何一個網站都能叫
+ * 這支程式去打你的 NAS。拍照頁仍放在 NAS 上時不帶 Origin，本來就是同源，
+ * 不受這段影響，所以兩種放法可以並存。
+ */
+$ALLOWED_ORIGINS = array(
+    'https://pipi6811-ui.github.io',
+);
+
+function allow_origin($origins) {
+    if (headers_sent() || !isset($_SERVER['HTTP_ORIGIN'])) {
+        return;
+    }
+    // 回應內容會因來源而異，少了這行，中間的快取可能把 A 站的回應拿給 B 站
+    header('Vary: Origin');
+    if (in_array($_SERVER['HTTP_ORIGIN'], $origins, true)) {
+        header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+    }
+}
+// 放在最前面：後面所有回應（含錯誤與致命錯誤）都要帶著這個標頭，
+// 否則登入失敗時網頁連「為什麼失敗」都讀不到，只會得到一句看不懂的錯誤。
+allow_origin($ALLOWED_ORIGINS);
+
+// 目前送出的請求（GET、表單 POST）都不會觸發預檢，所以這段現在不會用到。
+// 但只要日後多帶一個自訂標頭就會觸發，屆時少了它會變成很難查的失敗。
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Max-Age: 600');
+    http_response_code(204);
+    exit;
+}
+
 function refuse($code, $why) {
     if (!headers_sent()) {
         http_response_code($code);

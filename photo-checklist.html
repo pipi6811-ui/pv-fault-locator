@@ -1416,7 +1416,11 @@ function synoErr(code){ return SYNO_ERR[code]||("錯誤碼 "+code); }
 
 /* ── 上傳目的地：固定值，使用者不可更改 ──
    要換 NAS 位址或根目錄時改這兩行，其餘程式不必動。
-   NAS_URL 必須與本頁同源，否則瀏覽器會擋下上傳。 */
+
+   本頁由 GitHub Pages 提供，與 NAS 不同源，所以上傳一定是跨來源請求。
+   能通是因為 proxy.php 明確把本頁的來源列進 Access-Control-Allow-Origin；
+   換頁面網址（換帳號、改用自訂網域）時，proxy.php 的 $ALLOWED_ORIGINS
+   也要跟著加，否則上傳會過得去但網頁讀不到回應，看起來像無聲失敗。 */
 var NAS_URL  = "https://yangchin.synology.me/pvapi/proxy.php";
 var NAS_ROOT = "/暘勤/99 維運上傳照片";
 
@@ -1477,10 +1481,14 @@ function reachErr(kind){
       "?_cgi=query.cgi&amp;api=SYNO.API.Info&amp;version=1&amp;method=query</code>，"+
       "看它回什麼——通常會指出轉發程式或 PHP 服務的問題");
 
+  // 本頁在 GitHub Pages、NAS 在別的網域，跨來源是常態而不是設定錯誤。
+  // 會被擋通常只有一個原因：proxy.php 沒把本頁的來源列進允許清單。
   return htmlErr("連得到 NAS，但瀏覽器擋下跨網域請求（CORS）。<br>"+
     "這個頁面在 <code>"+esc(location.origin)+"</code>，"+
-    "NAS 網址卻設成 <code>"+esc(nasBase())+"</code>，兩者不同源（網域或連接埠不一樣）。<br>"+
-    "解法：改用這個頁面同網域下的轉發程式，或改從 NAS 上的網址開啟這個頁面");
+    "NAS 在 <code>"+esc(nasBase())+"</code>，本來就不同源。<br>"+
+    "解法：打開 NAS 上的 <code>proxy.php</code>，確認 <code>$ALLOWED_ORIGINS</code> "+
+    "裡有 <code>"+esc(location.origin)+"</code>。若是舊版的 proxy.php（沒有這一段），"+
+    "請換成最新版再試");
 }
 function synoLogin(){
   var body=new URLSearchParams({
@@ -1889,7 +1897,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-21a";
+var APP_VERSION="2026-09-21b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
