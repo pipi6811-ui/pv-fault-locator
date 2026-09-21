@@ -323,7 +323,29 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>Synology NAS 上傳</h2></div>
+      <div class="sec-head"><span class="num">3</span><h2>拍照回饋</h2></div>
+      <div class="sec-body">
+        <p class="hint" style="margin-top:0">
+          大太陽下螢幕常常看不清楚，戴手套也感覺不到按鈕有沒有按到。
+          開著這兩項，不用盯螢幕也知道有沒有拍進去。
+        </p>
+        <div class="field">
+          <label class="chk"><input id="sVib" type="checkbox"><span>震動</span></label>
+          <label class="chk"><input id="sSnd" type="checkbox"><span>快門聲</span></label>
+        </div>
+        <div class="btnrow">
+          <button class="b2" id="btnFbTest" type="button">試一下</button>
+        </div>
+        <div class="note" id="fbState">—</div>
+        <p class="hint">
+          失敗時震動與聲音都不一樣（長—長），所以照片沒存進去你會立刻知道，
+          不會整輪拍完才發現少了幾張。AI 自動改掉項目時是短震兩下，提醒你看一眼。
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">4</span><h2>Synology NAS 上傳</h2></div>
       <div class="sec-body">
         <div class="field">
           <label>照片會傳到這裡</label>
@@ -356,7 +378,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">4</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
+      <div class="sec-head"><span class="num">5</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
@@ -400,7 +422,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">5</span><h2>儲存空間</h2></div>
+      <div class="sec-head"><span class="num">6</span><h2>儲存空間</h2></div>
       <div class="sec-body">
         <div id="quotaText" style="font-size:13px;font-weight:600">計算中…</div>
         <div class="bar"><i id="quotaBar"></i></div>
@@ -413,7 +435,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">6</span><h2>離線可用</h2></div>
+      <div class="sec-head"><span class="num">7</span><h2>離線可用</h2></div>
       <div class="sec-body">
         <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
         <div class="btnrow">
@@ -428,11 +450,11 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">7</span><h2>怎麼讓辨識變準</h2></div>
+      <div class="sec-head"><span class="num">8</span><h2>怎麼讓辨識變準</h2></div>
       <div class="sec-body">
         <div class="note">
           <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
-          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 4 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
+          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 5 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
           <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
           <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>。
         </div>
@@ -548,7 +570,8 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   owner:OWNERS[0].name,   // 業主決定檢查項目
   model:"",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
-  exclude:[]};       // 訓練時要排除哪些人的樣本
+  exclude:[],        // 訓練時要排除哪些人的樣本
+  vib:true, snd:true};  // 拍照回饋：震動、快門聲
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
 if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
@@ -1179,6 +1202,72 @@ function trainKnn(onNote){
 }
 function errText(e){ return (e&&e.message)?e.message:String(e); }
 
+/* ═══════════ 拍照回饋（震動／聲音） ═══════════
+   屋頂上戴手套、太陽直射，螢幕上的閃白根本看不到。震動和聲音是唯一
+   能在不看螢幕的情況下確認「有拍到」的回饋，失敗時更重要——否則整輪
+   拍完才發現少幾張，人已經下樓了。
+   聲音用 WebAudio 合成，不放音檔：離線一定有聲音，也不用多一次下載。 */
+var AC=null, fbLog=[];
+function canVib(){ return typeof navigator.vibrate==="function"; }
+function audioCtx(){
+  // iOS 只允許在使用者手勢裡建立／恢復音訊，所以這個函式一定要從 click 事件同步呼叫
+  try{
+    var C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return null;
+    if(!AC) AC=new C();
+    if(AC.state==="suspended") AC.resume();
+    return AC;
+  }catch(e){ return null; }
+}
+function vib(pattern){
+  if(!S.vib||!canVib()) return false;
+  try{ navigator.vibrate(pattern); return true; }catch(e){ return false; }
+}
+// 短促的帶通白噪音＝「喀」。兩下分開放，聽起來像機械快門的簾幕開關。
+function click(ctx,at,freq,gain,decay){
+  var len=Math.max(1,Math.floor(ctx.sampleRate*0.03));
+  var buf=ctx.createBuffer(1,len,ctx.sampleRate), d=buf.getChannelData(0);
+  for(var i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);
+  var src=ctx.createBufferSource(); src.buffer=buf;
+  var bp=ctx.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=freq; bp.Q.value=0.9;
+  var g=ctx.createGain(); g.gain.value=gain;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+  src.start(at);
+}
+function tone(ctx,at,freq,dur,gain){
+  var o=ctx.createOscillator(), g=ctx.createGain();
+  o.type="square"; o.frequency.value=freq;
+  g.gain.setValueAtTime(0,at);
+  g.gain.linearRampToValueAtTime(gain,at+0.01);
+  g.gain.setValueAtTime(gain,at+dur-0.02);
+  g.gain.linearRampToValueAtTime(0,at+dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(at); o.stop(at+dur+0.02);
+}
+function snd(kind){
+  if(!S.snd) return false;
+  var ctx=audioCtx(); if(!ctx) return false;
+  try{
+    var t=ctx.currentTime+0.001;
+    if(kind==="shot"){ click(ctx,t,1800,0.9,3); click(ctx,t+0.055,2600,0.5,6); }
+    else if(kind==="ai"){ tone(ctx,t,880,0.06,0.25); tone(ctx,t+0.09,1320,0.06,0.25); }
+    else { tone(ctx,t,320,0.18,0.35); tone(ctx,t+0.26,240,0.28,0.35); }
+    return true;
+  }catch(e){ return false; }
+}
+// 三種回饋刻意做得完全不一樣，口袋裡也分得出來是哪一種
+var FB={
+  shot:{vib:35,   snd:"shot"},   // 拍到了
+  ai  :{vib:[0,25,70,25], snd:"ai"},  // AI 把項目改掉了，看一眼
+  err :{vib:[0,220,120,220], snd:"err"}  // 沒存進去
+};
+function fb(kind){
+  var f=FB[kind]; if(!f) return;
+  var v=vib(f.vib), s=snd(f.snd);
+  fbLog.push({kind:kind,vib:v,snd:s});
+  if(fbLog.length>50) fbLog.shift();
+}
+
 /* ═══════════ 拍照 ═══════════ */
 var busy=false;
 function shoot(){
@@ -1191,6 +1280,10 @@ function shoot(){
   var scale=Math.min(1,1920/Math.max(vw,vh));
   cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
   cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
+  // 畫面已經凍結，這一刻才是「拍到了」。放在這裡而不是存檔成功之後，
+  // 是因為手感要跟按下去同步；存檔失敗另外有一組明顯不同的回饋。
+  // 也必須在 click 事件的同步流程裡，iOS 才肯解鎖音訊。
+  fb("shot");
 
   // 浮水印還沒蓋上去，這時的畫面才適合留做訓練資料
   var clean=to224(cv);
@@ -1200,6 +1293,7 @@ function shoot(){
     var asShown=hit?displayOf(hit.label):null;
     if(hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
       curItem=asShown; overrode=true;
+      fb("ai");
     }
     if(hit){
       $("aiChip").classList.remove("hidden");
@@ -1221,6 +1315,7 @@ function shoot(){
   }).then(function(){
     return refreshPhotos();
   }).catch(function(err){
+    fb("err");
     alert("拍照失敗："+errText(err)+"\n\n若是空間不足，請先上傳或刪除部分照片。");
   }).then(function(){
     busy=false; $("shutter").disabled=!camReady;
@@ -1327,7 +1422,7 @@ function safeFolder(s){
   return String(s==null?"":s).replace(/[\\\/:*?"<>|]/g,"_")
     .replace(/^[.\s]+|[.\s]+$/g,"");
 }
-// 照片依維運區域分子資料夾，換案場只需改第 1 區的區域名稱
+// 照片依維運區域分子資料夾，換案場只需改第 2 區的區域名稱
 function nasPath(){
   var area=safeFolder(S.area);
   return area ? NAS_ROOT+"/"+area : NAS_ROOT;
@@ -1438,7 +1533,7 @@ function uploadSelected(){
     return;
   }
   if(!NAS.user||!NAS.pass){
-    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 3 區填好再上傳。","warn");
+    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 4 區填好再上傳。","warn");
     return;
   }
   if(!safeFolder(S.area)){
@@ -1559,7 +1654,17 @@ function fillForms(){
   $("nUser").value=NAS.user;
   $("nPass").value=NAS.remember?NAS.pass:"";
   $("nRemember").checked=!!NAS.remember;
-  renderOwnerSel(); renderItemsPreview(); renderPathPreview();
+  $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
+  renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
+}
+// 震動在 iOS Safari 上不存在，寧可先講明白，不要讓人以為是壞了
+function renderFbState(){
+  var msg=canVib()
+    ? "<b>這支手機支援震動。</b>"
+    : "<b>這支手機不支援震動</b>（iPhone 的 Safari 一律不支援，不是設定壞掉）。";
+  msg+="快門聲走媒體音量，"+
+       "iPhone 側邊靜音鍵切到靜音時不會出聲。";
+  setNote($("fbState"),msg,canVib()?"ok":"warn");
 }
 // 換業主＝換整組檢查項目，拍照頁要跟著重畫
 function applyOwner(name){
@@ -1587,6 +1692,19 @@ $("btnSaveSet").addEventListener("click",function(){
 });
 $("sArea").addEventListener("input",function(){
   S.area=$("sArea").value.trim(); renderPathPreview();
+});
+// 回饋是拍照當下的手感，勾了就立刻生效並存起來，不用再按一次儲存
+$("sVib").addEventListener("change",function(){
+  S.vib=$("sVib").checked; writeJSON(SET_KEY,S); if(S.vib) vib(FB.shot.vib);
+});
+$("sSnd").addEventListener("change",function(){
+  S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
+});
+$("btnFbTest").addEventListener("click",function(){
+  // 三種依序放出來，讓人在案場前就先分清楚哪一種是失敗
+  fb("shot");
+  setTimeout(function(){ fb("ai"); },700);
+  setTimeout(function(){ fb("err"); },1500);
 });
 $("btnNasSave").addEventListener("click",function(){
   NAS.user=$("nUser").value.trim();
@@ -1766,7 +1884,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-12h";
+var APP_VERSION="2026-09-21a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1879,6 +1997,8 @@ window.__pv={
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
+  _fb:fb, _canVib:canVib, _fbPattern:FB,
+  get fbLog(){ return fbLog.slice(); }, _fbClear:function(){ fbLog.length=0; },
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
   setCur:function(v){ curItem=v; renderNow(); renderItemBtns(); },

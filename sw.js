@@ -3,7 +3,7 @@
    NAS 上傳一律走網路，永不快取。 */
 "use strict";
 
-var VERSION = "2026-09-12h";
+var VERSION = "2026-09-21a";
 var SHELL = "pvshoot-shell-" + VERSION;
 var RUNTIME = "pvshoot-runtime-" + VERSION;
 
