@@ -190,7 +190,7 @@
     #pShoot .items{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:5px;}
     #pShoot .item-btn{padding:9px 4px;font-size:13px;}
     #pShoot .btnrow{margin-top:6px;}
-    #pShoot #remoteHint,#pShoot #zoomNote{display:none;}
+    #pShoot #remoteHint,#pShoot #zoomNote,#pShoot #tapNote{display:none;}
     #pShoot .btnrow .b-sm{padding:7px 8px;font-size:12px;}
   }
 
@@ -248,6 +248,7 @@
         <div class="btnrow">
           <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
+        <p class="hint" id="tapNote">取景畫面整塊都可以按著拍照（設定頁第 3 區可關）。</p>
         <p class="hint" id="zoomNote">變焦方式：檢查中…</p>
         <p class="hint" id="remoteHint">
           藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
@@ -341,11 +342,19 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>拍照回饋</h2></div>
+      <div class="sec-head"><span class="num">3</span><h2>拍照操作與回饋</h2></div>
       <div class="sec-body">
+        <div class="field">
+          <label class="chk"><input id="sTapShoot" type="checkbox"><span>點畫面也能拍照</span></label>
+          <p class="hint">
+            取景畫面整塊都可以按，面積比快門鍵大得多，戴手套好按很多。
+            變焦按鈕不受影響（按 0.5×／望遠不會拍照）。
+            <b>怕誤觸就關掉</b>，快門鍵照常可用。
+          </p>
+        </div>
         <p class="hint" style="margin-top:0">
           大太陽下螢幕常常看不清楚，戴手套也感覺不到按鈕有沒有按到。
-          開著這兩項，不用盯螢幕也知道有沒有拍進去。
+          開著下面兩項，不用盯螢幕也知道有沒有拍進去。
         </p>
         <div class="field">
           <label class="chk"><input id="sVib" type="checkbox"><span>震動</span></label>
@@ -673,6 +682,7 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   exclude:[],        // 訓練時要排除哪些人的樣本
   vib:true, snd:true,   // 拍照回饋：震動、快門聲
   remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
+  tapShoot:true,        // 點取景畫面就拍照
   wideCam:"",           // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
   teleCam:""};          // 哪一顆算望遠：同上
 
@@ -1939,6 +1949,7 @@ function fillForms(){
   $("nPass").value=NAS.remember?NAS.pass:"";
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
+  $("sTapShoot").checked=!!S.tapShoot;
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
 }
@@ -1993,6 +2004,9 @@ $("sArea").addEventListener("input",function(){
 // 回饋是拍照當下的手感，勾了就立刻生效並存起來，不用再按一次儲存
 $("sVib").addEventListener("change",function(){
   S.vib=$("sVib").checked; writeJSON(SET_KEY,S); if(S.vib) vib(FB.shot.vib);
+});
+$("sTapShoot").addEventListener("change",function(){
+  S.tapShoot=$("sTapShoot").checked; writeJSON(SET_KEY,S);
 });
 $("sSnd").addEventListener("change",function(){
   S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
@@ -2184,7 +2198,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23g";
+var APP_VERSION="2026-09-23h";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2248,6 +2262,21 @@ $("btnSwUpdate").addEventListener("click",function(){
 
 /* ═══════════ 啟動 ═══════════ */
 $("shutter").addEventListener("click",shoot);
+/* 點取景畫面就拍照。面積比快門鍵大得多，戴手套好按；遙控器若是以指標
+   （滑鼠／游標）身分連上手機的，這一點也會被當成點擊而能拍照——鍵盤那條路
+   走不通時，這是唯一還可能通的。變焦按鈕在畫面上，要排除掉，不然按 0.5×
+   會順便拍一張。 */
+/* 用捕獲階段，而不是等事件冒泡上來：變焦按鈕被點下後 renderZoomBar() 會整個
+   重畫，按鈕在冒泡到這裡之前就已經離開 DOM，closest() 會找不到 .zoombar，
+   於是按 0.5× 會順便拍一張。捕獲階段時按鈕還在原位，判斷才準。
+   排除所有 button 而不只是變焦列，日後在取景畫面上再加控制項也不會踩到。 */
+$("camBox").addEventListener("click",function(e){
+  if(!S.tapShoot) return;
+  if(!$("pShoot").classList.contains("on")) return;
+  var t=e.target;
+  if(t&&t.closest&&t.closest("button")) return;
+  shoot();
+},true);
 $("btnFlip").addEventListener("click",function(){
   // 前後切換要放掉指定的鏡頭，否則 deviceId 會蓋過 facingMode，按了沒反應
   facing=(facing==="environment")?"user":"environment";
