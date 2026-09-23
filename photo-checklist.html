@@ -67,6 +67,19 @@
     color:#fff;font-size:13px;font-weight:600;padding:20px;background:#000;}
   .ai-chip{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;
     padding:5px 9px;border-radius:6px;font-size:12px;font-weight:700;}
+  /* 變焦列疊在畫面上，不佔版面高度——橫拍時每一個像素都很緊。
+     按鈕做到 44px 以上，戴手套才點得到。 */
+  .zoombar{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);
+    display:flex;gap:5px;background:rgba(0,0,0,.55);padding:5px;border-radius:999px;}
+  .zoombar button{min-width:46px;min-height:44px;border:0;border-radius:999px;
+    background:rgba(255,255,255,.16);color:#fff;font-family:var(--mono);
+    font-size:14px;font-weight:700;cursor:pointer;}
+  .zoombar button.on{background:var(--hazard);color:var(--ink);}
+  .zoombar button:disabled{opacity:.35;}
+  @media (orientation:landscape) and (max-height:600px){
+    .zoombar{bottom:5px;padding:4px;gap:4px;}
+    .zoombar button{min-width:40px;min-height:40px;font-size:13px;}
+  }
   .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;}
   .flash.go{animation:fl .32s ease-out;}
   @keyframes fl{from{opacity:.85;}to{opacity:0;}}
@@ -177,7 +190,7 @@
     #pShoot .items{grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:5px;}
     #pShoot .item-btn{padding:9px 4px;font-size:13px;}
     #pShoot .btnrow{margin-top:6px;}
-    #pShoot #remoteHint{display:none;}
+    #pShoot #remoteHint,#pShoot #zoomNote{display:none;}
     #pShoot .btnrow .b-sm{padding:7px 8px;font-size:12px;}
   }
 
@@ -220,6 +233,7 @@
       <div class="flash" id="flash"></div>
       <div class="cam-msg" id="camMsg">相機啟動中…</div>
       <div class="ai-chip hidden" id="aiChip">AI 待命</div>
+      <div class="zoombar" id="zoomBar"></div>
     </div>
 
     <button class="shutter" id="shutter" type="button" disabled>拍照</button>
@@ -234,6 +248,7 @@
         <div class="btnrow">
           <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
+        <p class="hint" id="zoomNote">變焦方式：檢查中…</p>
         <p class="hint" id="remoteHint">
           藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
           <b>第 9 區</b>讓它學一次你手上那支的按鍵。
@@ -759,6 +774,62 @@ function renderItemBtns(){
 /* ═══════════ 相機 ═══════════ */
 var stream=null, facing="environment", camReady=false;
 function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; } }
+
+/* ── 變焦 ──
+   兩種來源，能用硬體就用硬體：
+   1. 鏡頭本身的變焦（MediaStreamTrack 的 zoom）。真的變焦，不損畫質。
+      Android Chrome 多半支援；iOS Safari 目前不支援這個設定。
+   2. 收不到硬體變焦時，改成裁切中央再放大（數位變焦）。畫質會掉，
+      所以相機串流故意要高解析度，裁完才還有足夠像素。
+   兩者可以疊：硬體先推到它的上限，不足的部分才用裁切補。 */
+var ZOOM_LEVELS=[1,2,3,4];
+var zoomLevel=1, zoomCaps=null, digZoom=1;
+function zoomSupported(){ return !!zoomCaps; }
+function videoTrack(){
+  if(!stream) return null;
+  var ts=stream.getVideoTracks();
+  return ts&&ts.length?ts[0]:null;
+}
+function readZoomCaps(){
+  zoomCaps=null;
+  var t=videoTrack();
+  if(!t||!t.getCapabilities) return;
+  try{
+    var c=t.getCapabilities();
+    // min 不是 1 的裝置，數值不是倍率，換算沒有依據，寧可退回裁切
+    if(c&&c.zoom&&typeof c.zoom.max==="number"&&c.zoom.min===1&&c.zoom.max>1) zoomCaps=c.zoom;
+  }catch(e){}
+}
+function applyZoom(level){
+  zoomLevel=level;
+  var hw=1;
+  if(zoomCaps) hw=Math.min(level,zoomCaps.max);
+  digZoom=level/hw;
+  // 預覽用 CSS 放大；實際拍下來是在 shoot() 裡裁切，兩者倍率一致
+  $("video").style.transform=digZoom>1?"scale("+digZoom+")":"";
+  if(zoomCaps){
+    var t=videoTrack();
+    if(t&&t.applyConstraints) t.applyConstraints({advanced:[{zoom:hw}]}).catch(function(){});
+  }
+  renderZoomBar();
+}
+function renderZoomBar(){
+  var bar=$("zoomBar");
+  bar.innerHTML="";
+  ZOOM_LEVELS.forEach(function(z){
+    var b=document.createElement("button");
+    b.type="button"; b.textContent=z+"×";
+    if(z===zoomLevel) b.className="on";
+    b.addEventListener("click",function(){ applyZoom(z); });
+    bar.appendChild(b);
+  });
+}
+function zoomKind(){
+  if(!camReady) return "相機還沒啟動";
+  if(zoomCaps) return "鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補";
+  return "裁切放大（這支手機的瀏覽器不支援鏡頭變焦，放大倍率越高畫質越差）";
+}
+
 function startCam(){
   camReady=false; $("shutter").disabled=true; stopCam();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
@@ -766,11 +837,15 @@ function startCam(){
     return;
   }
   navigator.mediaDevices.getUserMedia({
-    video:{facingMode:facing,width:{ideal:1920},height:{ideal:1440}},audio:false
+    // 要得比實際存檔的 1920 高：數位變焦是裁中央，來源不夠大就只能糊掉
+    video:{facingMode:facing,width:{ideal:3840},height:{ideal:2880}},audio:false
   }).then(function(st){
     stream=st; var v=$("video"); v.srcObject=st; return v.play();
   }).then(function(){
     camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
+    readZoomCaps();
+    applyZoom(1);          // 換鏡頭後倍率歸位，免得沿用上一顆鏡頭的設定
+    $("zoomNote").textContent="變焦方式："+zoomKind();
   }).catch(function(err){
     var m=err&&err.name?err.name:"";
     var msg="相機打不開："+(err&&err.message?err.message:m);
@@ -1317,9 +1392,13 @@ function shoot(){
 
   var v=$("video"), cv=$("work");
   var vw=v.videoWidth||1280, vh=v.videoHeight||960;
-  var scale=Math.min(1,1920/Math.max(vw,vh));
-  cv.width=Math.round(vw*scale); cv.height=Math.round(vh*scale);
-  cv.getContext("2d").drawImage(v,0,0,cv.width,cv.height);
+  // 數位變焦：從畫面正中央裁一塊出來。裁的倍率必須和預覽的 CSS 放大一致，
+  // 否則所見不是所得——取景時對準的東西會跑掉。
+  var sw=vw/digZoom, sh=vh/digZoom;
+  var sx=(vw-sw)/2, sy=(vh-sh)/2;
+  var scale=Math.min(1,1920/Math.max(sw,sh));
+  cv.width=Math.round(sw*scale); cv.height=Math.round(sh*scale);
+  cv.getContext("2d").drawImage(v,sx,sy,sw,sh,0,0,cv.width,cv.height);
   // 畫面已經凍結，這一刻才是「拍到了」。放在這裡而不是存檔成功之後，
   // 是因為手感要跟按下去同步；存檔失敗另外有一組明顯不同的回饋。
   // 也必須在 click 事件的同步流程裡，iOS 才肯解鎖音訊。
@@ -1933,7 +2012,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23b";
+var APP_VERSION="2026-09-23c";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2126,6 +2205,10 @@ window.__pv={
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   _fb:fb, _canVib:canVib, _fbPattern:FB,
+  _zoom:applyZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
+  get zoom(){ return zoomLevel; }, get digZoom(){ return digZoom; },
+  get zoomHw(){ return !!zoomCaps; },
+  _fakeZoomCaps:function(c){ zoomCaps=c; applyZoom(zoomLevel); },
   _keyId:keyId, _isShutterKey:isShutterKey, _learn:startLearn,
   get learning(){ return learning; }, get remoteKeys(){ return (S.remoteKeys||[]).slice(); },
   get fbLog(){ return fbLog.slice(); }, _fbClear:function(){ fbLog.length=0; },
