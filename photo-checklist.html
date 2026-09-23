@@ -487,9 +487,18 @@
         <p class="hint">
           <b>如果按了完全沒反應、畫面也收不到任何按鍵：</b>那不是設定問題，是你的遙控器
           送的是<b>音量鍵</b>——iOS 與 Android 都不會把音量鍵交給網頁，任何網頁都攔不到。
-          多數遙控器側邊有 <b>iOS／Android 模式開關</b>，切到 <b>Android</b> 那側通常會改送
-          Enter，就收得到了。切了還是沒反應的話，這支遙控器沒辦法用在網頁上。
         </p>
+        <div class="note warn">
+          <b>先試這個：把遙控器切到 Android 模式。</b><br>
+          多數遙控器側邊有 iOS／Android 開關。iOS 那側送的是音量鍵（因為系統相機用音量鍵
+          拍照）；Android 那側多半改送 Enter，那是正規按鍵，<b>iPhone 的 Safari 也收得到</b>。
+          所以就算你用 iPhone，也要切到 Android 那側。<br><br>
+          切完要<b>重新配對</b>：先到手機藍牙設定把它「忘記此裝置」，再重新連一次——
+          切模式後藍牙身分常會變，不重配會連到舊的。<br><br>
+          <b>切了還是收不到，就換一支「藍牙簡報筆（翻頁筆）」。</b>它送的是
+          PageUp／PageDown，是正規鍵盤按鍵，網頁收得到，本 App 預設就支援。
+          相機遙控器多半只送音量鍵，網頁永遠用不了。
+        </div>
       </div>
     </section>
   </div>
@@ -1924,7 +1933,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23a";
+var APP_VERSION="2026-09-23b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1996,7 +2005,10 @@ $("btnFlip").addEventListener("click",function(){
    遙控器對手機而言就是鍵盤，但各廠牌送的按鍵不一樣，光靠預設清單一定會漏。
    所以除了常見的之外，另外提供「學一次」：按下遙控器，把它送的鍵記起來。
    手機本身的音量鍵不會產生鍵盤事件，網頁一律攔不到，這點學不起來。 */
+// PageUp／PageDown 是簡報筆（翻頁筆）送的鍵。相機遙控器多半只送音量鍵、
+// 網頁一律收不到，簡報筆卻是正規鍵盤，反而能用，所以預設就收。
 var SHUTTER_KEYS={"Enter":1," ":1,"Spacebar":1,"ArrowUp":1,"ArrowDown":1,
+  "ArrowLeft":1,"ArrowRight":1,"PageUp":1,"PageDown":1,
   "AudioVolumeUp":1,"AudioVolumeDown":1,"VolumeUp":1,"VolumeDown":1,"MediaPlayPause":1};
 
 // 有些遙控器的 e.key 是 Unidentified，只有 code 或 keyCode 認得出來，都要能存
