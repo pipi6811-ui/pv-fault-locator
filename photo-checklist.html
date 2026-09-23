@@ -251,7 +251,7 @@
         <p class="hint" id="zoomNote">變焦方式：檢查中…</p>
         <p class="hint" id="remoteHint">
           藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
-          <b>第 9 區</b>讓它學一次你手上那支的按鍵。
+          <b>第 10 區</b>讓它學一次你手上那支的按鍵。
           手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
         </p>
       </div>
@@ -487,7 +487,32 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">9</span><h2>藍牙遙控器</h2></div>
+      <div class="sec-head"><span class="num">9</span><h2>廣角鏡頭</h2></div>
+      <div class="sec-body">
+        <p class="hint" style="margin-top:0">
+          拍照頁的 <b>0.5×</b> 不是把畫面縮小——那做不到。它是切換到手機上
+          <b>超廣角那顆鏡頭</b>，視野才會真的變大。手機把後鏡頭拆成好幾個裝置，
+          App 要指定要哪一顆。
+        </p>
+        <div class="note" id="camList"><b>偵測到的鏡頭：</b>檢查中…</div>
+        <div class="field">
+          <label>哪一顆當廣角</label>
+          <select id="sWideCam"></select>
+          <p class="hint">
+            名稱的寫法各家不同，自動判斷有可能認不出來。上面清單看得到實際名稱，
+            認不出來時自己挑一顆試試看——挑錯只是視野不對，按 1× 就換回來，不會壞。
+          </p>
+        </div>
+        <div class="note warn">
+          <b>清單裡只有一顆、或沒有超廣角：</b>代表這支手機的瀏覽器不把超廣角
+          單獨開放給網頁，那 0.5× 就做不出來。這不是設定問題，網頁拿不到的鏡頭
+          就是拿不到。
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">10</span><h2>藍牙遙控器</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           遙控器對手機來說就是一個鍵盤，但每一支送出的按鍵都不一樣。
@@ -626,7 +651,8 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
   exclude:[],        // 訓練時要排除哪些人的樣本
   vib:true, snd:true,   // 拍照回饋：震動、快門聲
-  remoteKeys:[]};       // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
+  remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
+  wideCam:""};          // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
 if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
@@ -782,8 +808,37 @@ function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();
    2. 收不到硬體變焦時，改成裁切中央再放大（數位變焦）。畫質會掉，
       所以相機串流故意要高解析度，裁完才還有足夠像素。
    兩者可以疊：硬體先推到它的上限，不足的部分才用裁切補。 */
+/* ── 廣角 ──
+   裁切放大只能拉近，做不出廣角：視野變大不可能靠裁切，必須真的換一顆鏡頭。
+   手機多半把後鏡頭拆成好幾個裝置（廣角／超廣角／望遠），指定 deviceId 就能
+   選到超廣角那顆。判斷哪一顆是超廣角只能看名稱，各家寫法不同，所以自動認不
+   出來時，設定頁可以手動指定。 */
 var ZOOM_LEVELS=[1,2,3,4];
 var zoomLevel=1, zoomCaps=null, digZoom=1;
+var cams=[], lensId=null, uiZoom=1;
+var WIDE_RE=/ultra.?wide|超廣角|超廣角鏡頭|0\.5/i;
+function autoWideId(){
+  for(var i=0;i<cams.length;i++) if(WIDE_RE.test(cams[i].label||"")) return cams[i].deviceId;
+  return null;
+}
+function wideId(){
+  if(S.wideCam==="off") return null;                 // 使用者明確關掉
+  if(S.wideCam&&camById(S.wideCam)) return S.wideCam; // 使用者手動指定
+  return autoWideId();
+}
+function camById(id){
+  for(var i=0;i<cams.length;i++) if(cams[i].deviceId===id) return cams[i];
+  return null;
+}
+function listCams(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices) return Promise.resolve();
+  // 名稱要等使用者授權後才讀得到，所以這一步一定要在 getUserMedia 成功之後
+  return navigator.mediaDevices.enumerateDevices().then(function(ds){
+    cams=ds.filter(function(d){ return d.kind==="videoinput"; })
+           .map(function(d){ return {deviceId:d.deviceId,label:d.label||""}; });
+    renderCamList();
+  }).catch(function(){});
+}
 function zoomSupported(){ return !!zoomCaps; }
 function videoTrack(){
   if(!stream) return null;
@@ -813,21 +868,64 @@ function applyZoom(level){
   }
   renderZoomBar();
 }
+// 0.5× 不是「縮小」，是換成超廣角那顆鏡頭；認不出超廣角時就不顯示這一檔
+function zoomChoices(){
+  return (wideId()?[0.5]:[]).concat(ZOOM_LEVELS);
+}
+function pickZoom(level){
+  var wantWide=(level<1);
+  var isWide=!!(lensId&&lensId===wideId());
+  if(wantWide!==isWide){
+    // 換鏡頭要重開串流；uiZoom 先記著，startCam 成功後再套用
+    lensId=wantWide?wideId():null;
+    uiZoom=level;
+    startCam();
+    return;
+  }
+  uiZoom=level;
+  applyZoom(wantWide?1:level);   // 超廣角鏡頭本身就是 0.5，不再另外縮放
+}
 function renderZoomBar(){
   var bar=$("zoomBar");
   bar.innerHTML="";
-  ZOOM_LEVELS.forEach(function(z){
+  zoomChoices().forEach(function(z){
     var b=document.createElement("button");
-    b.type="button"; b.textContent=z+"×";
-    if(z===zoomLevel) b.className="on";
-    b.addEventListener("click",function(){ applyZoom(z); });
+    b.type="button"; b.textContent=(z<1?"0.5":z)+"×";
+    if(z===uiZoom) b.className="on";
+    b.addEventListener("click",function(){ pickZoom(z); });
     bar.appendChild(b);
   });
 }
 function zoomKind(){
   if(!camReady) return "相機還沒啟動";
-  if(zoomCaps) return "鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補";
-  return "裁切放大（這支手機的瀏覽器不支援鏡頭變焦，放大倍率越高畫質越差）";
+  var wide=wideId()
+    ? "廣角：可切 0.5×（"+esc(trimLabel(camById(wideId()).label))+"）"
+    : "廣角：這支手機沒有可指定的超廣角鏡頭";
+  var zin=zoomCaps
+    ? "拉近：鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補"
+    : "拉近：裁切放大（不支援鏡頭變焦，倍率越高畫質越差）";
+  return wide+"；"+zin;
+}
+function trimLabel(s){ return String(s||"").replace(/\s*\([0-9a-f:]{4,}\)\s*$/i,"").trim()||"未命名鏡頭"; }
+function renderCamList(){
+  if(!$("camList")) return;
+  $("camList").innerHTML="<b>偵測到的鏡頭：</b>"+
+    (cams.length?cams.map(function(c){
+      var mark=(c.deviceId===wideId())?"（用作廣角）":"";
+      return "<code>"+esc(trimLabel(c.label))+"</code>"+mark;
+    }).join("、"):"尚未偵測（要先允許相機權限）");
+  var sel=$("sWideCam");
+  if(!sel) return;
+  var cur=S.wideCam||"";
+  sel.innerHTML="";
+  var add=function(v,t){
+    var o=document.createElement("option");
+    o.value=v; o.textContent=t; if(v===cur) o.selected=true;
+    sel.appendChild(o);
+  };
+  add("","自動判斷"+(autoWideId()?"（目前認到："+trimLabel(camById(autoWideId()).label)+"）":"（目前認不出來）"));
+  cams.forEach(function(c){ add(c.deviceId,trimLabel(c.label)); });
+  add("off","不要 0.5× 這一檔");
 }
 
 function startCam(){
@@ -836,21 +934,31 @@ function startCam(){
     $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari，且網址必須是 https。";
     return;
   }
-  navigator.mediaDevices.getUserMedia({
-    // 要得比實際存檔的 1920 高：數位變焦是裁中央，來源不夠大就只能糊掉
-    video:{facingMode:facing,width:{ideal:3840},height:{ideal:2880}},audio:false
-  }).then(function(st){
+  // 指定了鏡頭就用 deviceId，否則交給 facingMode 決定前後
+  var vc=lensId?{deviceId:{exact:lensId}}:{facingMode:facing};
+  // 要得比實際存檔的 1920 高：數位變焦是裁中央，來源不夠大就只能糊掉
+  vc.width={ideal:3840}; vc.height={ideal:2880};
+  navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(st){
     stream=st; var v=$("video"); v.srcObject=st; return v.play();
   }).then(function(){
     camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
     readZoomCaps();
-    applyZoom(1);          // 換鏡頭後倍率歸位，免得沿用上一顆鏡頭的設定
+    // 指定鏡頭時 uiZoom 已經在 pickZoom 設好；一般啟動才歸位，
+    // 免得沿用上一顆鏡頭的倍率
+    if(!lensId&&uiZoom<1) uiZoom=1;
+    applyZoom(uiZoom<1?1:uiZoom);
+    return listCams();
+  }).then(function(){
+    renderZoomBar();
     $("zoomNote").textContent="變焦方式："+zoomKind();
   }).catch(function(err){
     var m=err&&err.name?err.name:"";
     var msg="相機打不開："+(err&&err.message?err.message:m);
     if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
     if(m==="NotFoundError") msg="找不到相機裝置。";
+    // 指定的鏡頭開不起來（裝置清單變了、或這顆不給獨立使用）就退回一般鏡頭，
+    // 不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多
+    if(lensId){ lensId=null; uiZoom=1; startCam(); return; }
     $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
   });
 }
@@ -1783,8 +1891,16 @@ function fillForms(){
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
-  renderRemoteList();
+  renderRemoteList(); renderCamList();
 }
+$("sWideCam").addEventListener("change",function(){
+  S.wideCam=$("sWideCam").value;
+  writeJSON(SET_KEY,S);
+  // 指定的那顆若正在用，先退回一般鏡頭，免得停在一顆已經不算廣角的鏡頭上
+  if(lensId){ lensId=null; uiZoom=1; startCam(); }
+  else renderZoomBar();
+  renderCamList();
+});
 // 震動在 iOS Safari 上不存在，寧可先講明白，不要讓人以為是壞了
 function renderFbState(){
   var msg=canVib()
@@ -2012,7 +2128,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23c";
+var APP_VERSION="2026-09-23d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2077,7 +2193,9 @@ $("btnSwUpdate").addEventListener("click",function(){
 /* ═══════════ 啟動 ═══════════ */
 $("shutter").addEventListener("click",shoot);
 $("btnFlip").addEventListener("click",function(){
-  facing=(facing==="environment")?"user":"environment"; startCam();
+  // 前後切換要放掉指定的鏡頭，否則 deviceId 會蓋過 facingMode，按了沒反應
+  facing=(facing==="environment")?"user":"environment";
+  lensId=null; uiZoom=1; startCam();
 });
 
 /* ═══════════ 藍牙快門遙控器 ═══════════
@@ -2205,7 +2323,11 @@ window.__pv={
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   _fb:fb, _canVib:canVib, _fbPattern:FB,
-  _zoom:applyZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
+  _zoom:pickZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
+  _choices:zoomChoices, get cams(){ return cams.slice(); },
+  get lensId(){ return lensId; }, _wideId:wideId, _autoWide:autoWideId,
+  _fakeCams:function(list){ cams=list.slice(); renderCamList(); renderZoomBar(); },
+  get uiZoom(){ return uiZoom; },
   get zoom(){ return zoomLevel; }, get digZoom(){ return digZoom; },
   get zoomHw(){ return !!zoomCaps; },
   _fakeZoomCaps:function(c){ zoomCaps=c; applyZoom(zoomLevel); },
