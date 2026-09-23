@@ -251,7 +251,7 @@
         <p class="hint" id="zoomNote">變焦方式：檢查中…</p>
         <p class="hint" id="remoteHint">
           藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
-          <b>第 10 區</b>讓它學一次你手上那支的按鍵。
+          <b>第 10 區</b>按「偵測遙控器按鍵」，把每顆都按一遍看收不收得到。
           手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
         </p>
       </div>
@@ -487,20 +487,29 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">9</span><h2>廣角鏡頭</h2></div>
+      <div class="sec-head"><span class="num">9</span><h2>鏡頭（廣角與望遠）</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
-          拍照頁的 <b>0.5×</b> 不是把畫面縮小——那做不到。它是切換到手機上
-          <b>超廣角那顆鏡頭</b>，視野才會真的變大。手機把後鏡頭拆成好幾個裝置，
-          App 要指定要哪一顆。
+          拍照頁的 <b>0.5×</b> 與 <b>望遠</b> 都不是縮放，是<b>換一顆鏡頭</b>。
+          0.5× 換到超廣角，視野才會真的變大（縮小畫面做不出廣角）；望遠換到
+          望遠鏡頭，是真的光學變焦，<b>不像裁切那樣越放大越糊</b>。手機把後鏡頭
+          拆成好幾個裝置，App 要指定要哪一顆。
         </p>
         <div class="note" id="camList"><b>偵測到的鏡頭：</b>檢查中…</div>
         <div class="field">
-          <label>哪一顆當廣角</label>
+          <label>哪一顆當廣角（0.5×）</label>
           <select id="sWideCam"></select>
+        </div>
+        <div class="field">
+          <label>哪一顆當望遠</label>
+          <select id="sTeleCam"></select>
           <p class="hint">
             名稱的寫法各家不同，自動判斷有可能認不出來。上面清單看得到實際名稱，
             認不出來時自己挑一顆試試看——挑錯只是視野不對，按 1× 就換回來，不會壞。
+            <br><br>
+            <b>「望遠」沒有標倍率是刻意的。</b>望遠鏡頭的實際倍率各機型不同
+            （2×／3×／5× 都有），名稱裡沒寫、程式也量不出來，標一個猜來的數字
+            只會騙人。數字檔（2×／4×）仍是裁切，可以疊在望遠之上再拉近。
           </p>
         </div>
         <div class="note warn">
@@ -516,11 +525,13 @@
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           遙控器對手機來說就是一個鍵盤，但每一支送出的按鍵都不一樣。
-          按了沒反應，多半只是它送的那個鍵不在預設清單裡——按下面的按鈕讓它學一次就好。
+          按了沒反應時，按下面的「偵測遙控器按鍵」，然後<b>把遙控器上每一顆都按一遍</b>。
+          畫面會列出收到的每一個按鍵，沒在預設清單裡的會直接學起來。
+          全部按完仍然掛零，才代表訊號真的沒送到瀏覽器。
         </p>
         <div class="note" id="remoteList"><b>已學會的按鍵：</b>尚未學習</div>
         <div class="btnrow">
-          <button class="b1" id="btnLearnKey" type="button">學習遙控器按鍵</button>
+          <button class="b1" id="btnLearnKey" type="button">偵測遙控器按鍵</button>
           <button class="b2 b-sm b-danger" id="btnClearKeys" type="button">清除</button>
         </div>
         <div class="note hidden" id="learnState"></div>
@@ -659,7 +670,8 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   exclude:[],        // 訓練時要排除哪些人的樣本
   vib:true, snd:true,   // 拍照回饋：震動、快門聲
   remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
-  wideCam:""};          // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
+  wideCam:"",           // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
+  teleCam:""};          // 哪一顆算望遠：同上
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
 if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
@@ -820,13 +832,26 @@ function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();
    手機多半把後鏡頭拆成好幾個裝置（廣角／超廣角／望遠），指定 deviceId 就能
    選到超廣角那顆。判斷哪一顆是超廣角只能看名稱，各家寫法不同，所以自動認不
    出來時，設定頁可以手動指定。 */
-var ZOOM_LEVELS=[1,2,3,4];
+var ZOOM_LEVELS=[1,2,4];
 var zoomLevel=1, zoomCaps=null, digZoom=1;
 var cams=[], lensId=null, uiZoom=1;
 var WIDE_RE=/ultra.?wide|超廣角|超廣角鏡頭|0\.5/i;
+// 望遠鏡頭是真的光學變焦，畫質不打折，比裁切放大好得多。
+// 但它的實際倍率各機型不同（2×／3×／5× 都有），名稱裡沒寫、程式也量不出來，
+// 所以按鈕標「望遠」而不是標一個猜來的數字。
+var TELE_RE=/tele(photo)?|望遠/i;
 function autoWideId(){
   for(var i=0;i<cams.length;i++) if(WIDE_RE.test(cams[i].label||"")) return cams[i].deviceId;
   return null;
+}
+function autoTeleId(){
+  for(var i=0;i<cams.length;i++) if(TELE_RE.test(cams[i].label||"")) return cams[i].deviceId;
+  return null;
+}
+function teleId(){
+  if(S.teleCam==="off") return null;
+  if(S.teleCam&&camById(S.teleCam)) return S.teleCam;
+  return autoTeleId();
 }
 function wideId(){
   if(S.wideCam==="off") return null;                 // 使用者明確關掉
@@ -875,29 +900,37 @@ function applyZoom(level){
   }
   renderZoomBar();
 }
-// 0.5× 不是「縮小」，是換成超廣角那顆鏡頭；認不出超廣角時就不顯示這一檔
+/* 0.5× 與「望遠」都不是縮放，是換鏡頭；認不出那顆就不顯示該檔，不給假的。
+   順序：0.5× → 1× → 望遠 → 2× → 4×。數字檔是裁切，可以疊在望遠之上。 */
 function zoomChoices(){
-  return (wideId()?[0.5]:[]).concat(ZOOM_LEVELS);
+  return (wideId()?[0.5]:[]).concat([1])
+    .concat(teleId()?["tele"]:[])
+    .concat(ZOOM_LEVELS.slice(1));
 }
+function lensFor(v){
+  if(v===0.5) return wideId();
+  if(v==="tele") return teleId();
+  return null;
+}
+// 換到的鏡頭本身就代表那個視野，不再另外縮放；數字檔才是裁切倍率
+function mulFor(v){ return (v===0.5||v==="tele")?1:v; }
+function zoomText(v){ return v==="tele"?"望遠":((v<1?"0.5":v)+"×"); }
 function pickZoom(level){
-  var wantWide=(level<1);
-  var isWide=!!(lensId&&lensId===wideId());
-  if(wantWide!==isWide){
+  var want=lensFor(level)||null;
+  if(want!==lensId){
     // 換鏡頭要重開串流；uiZoom 先記著，startCam 成功後再套用
-    lensId=wantWide?wideId():null;
-    uiZoom=level;
-    startCam();
+    lensId=want; uiZoom=level; startCam();
     return;
   }
   uiZoom=level;
-  applyZoom(wantWide?1:level);   // 超廣角鏡頭本身就是 0.5，不再另外縮放
+  applyZoom(mulFor(level));
 }
 function renderZoomBar(){
   var bar=$("zoomBar");
   bar.innerHTML="";
   zoomChoices().forEach(function(z){
     var b=document.createElement("button");
-    b.type="button"; b.textContent=(z<1?"0.5":z)+"×";
+    b.type="button"; b.textContent=zoomText(z);
     if(z===uiZoom) b.className="on";
     b.addEventListener("click",function(){ pickZoom(z); });
     bar.appendChild(b);
@@ -908,9 +941,11 @@ function zoomKind(){
   var wide=wideId()
     ? "廣角：可切 0.5×（"+esc(trimLabel(camById(wideId()).label))+"）"
     : "廣角：這支手機沒有可指定的超廣角鏡頭";
-  var zin=zoomCaps
-    ? "拉近：鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補"
-    : "拉近：裁切放大（不支援鏡頭變焦，倍率越高畫質越差）";
+  var zin=teleId()
+    ? "拉近：有望遠鏡頭可用（真的換鏡頭，不損畫質；數字檔仍是裁切）"
+    : (zoomCaps
+      ? "拉近：鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補"
+      : "拉近：裁切放大（不支援鏡頭變焦，倍率越高畫質越差）");
   return wide+"；"+zin;
 }
 function trimLabel(s){ return String(s||"").replace(/\s*\([0-9a-f:]{4,}\)\s*$/i,"").trim()||"未命名鏡頭"; }
@@ -918,21 +953,25 @@ function renderCamList(){
   if(!$("camList")) return;
   $("camList").innerHTML="<b>偵測到的鏡頭：</b>"+
     (cams.length?cams.map(function(c){
-      var mark=(c.deviceId===wideId())?"（用作廣角）":"";
+      var mark=(c.deviceId===wideId())?"（用作廣角）"
+              :(c.deviceId===teleId())?"（用作望遠）":"";
       return "<code>"+esc(trimLabel(c.label))+"</code>"+mark;
     }).join("、"):"尚未偵測（要先允許相機權限）");
-  var sel=$("sWideCam");
+  fillLensSel($("sWideCam"),S.wideCam,autoWideId(),"不要 0.5× 這一檔");
+  fillLensSel($("sTeleCam"),S.teleCam,autoTeleId(),"不要「望遠」這一檔");
+}
+function fillLensSel(sel,cur,auto,offText){
   if(!sel) return;
-  var cur=S.wideCam||"";
+  cur=cur||"";
   sel.innerHTML="";
   var add=function(v,t){
     var o=document.createElement("option");
     o.value=v; o.textContent=t; if(v===cur) o.selected=true;
     sel.appendChild(o);
   };
-  add("","自動判斷"+(autoWideId()?"（目前認到："+trimLabel(camById(autoWideId()).label)+"）":"（目前認不出來）"));
+  add("","自動判斷"+(auto?"（目前認到："+trimLabel(camById(auto).label)+"）":"（目前認不出來）"));
   cams.forEach(function(c){ add(c.deviceId,trimLabel(c.label)); });
-  add("off","不要 0.5× 這一檔");
+  add("off",offText);
 }
 
 function startCam(){
@@ -1900,14 +1939,18 @@ function fillForms(){
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
 }
-$("sWideCam").addEventListener("change",function(){
-  S.wideCam=$("sWideCam").value;
-  writeJSON(SET_KEY,S);
-  // 指定的那顆若正在用，先退回一般鏡頭，免得停在一顆已經不算廣角的鏡頭上
-  if(lensId){ lensId=null; uiZoom=1; startCam(); }
-  else renderZoomBar();
-  renderCamList();
-});
+function onLensSel(key,el){
+  el.addEventListener("change",function(){
+    S[key]=el.value;
+    writeJSON(SET_KEY,S);
+    // 指定的那顆若正在用，先退回一般鏡頭，免得停在一顆已經不算廣角／望遠的鏡頭上
+    if(lensId){ lensId=null; uiZoom=1; startCam(); }
+    else renderZoomBar();
+    renderCamList();
+  });
+}
+onLensSel("wideCam",$("sWideCam"));
+onLensSel("teleCam",$("sTeleCam"));
 // 震動在 iOS Safari 上不存在，寧可先講明白，不要讓人以為是壞了
 function renderFbState(){
   var msg=canVib()
@@ -2131,11 +2174,14 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
     Array.prototype.forEach.call(document.querySelectorAll(".page"),function(p){p.classList.remove("on");});
     $(t.dataset.p).classList.add("on");
     if(t.dataset.p==="pSet") updateQuota();
+    // 離開設定頁就結束偵測。忘了按「停止偵測」而回到拍照頁的話，
+    // 遙控器的按鍵會一直被當成學習用而不拍照——很難聯想到原因。
+    else if(learning) stopLearn(true);
   });
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23e";
+var APP_VERSION="2026-09-23f";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2245,33 +2291,56 @@ function isShutterKey(e){
   return !!SHUTTER_KEYS[id]||(S.remoteKeys||[]).indexOf(id)>=0;
 }
 
-var learning=false, learnTimer=null;
+/* 偵測模式：一次只收一個鍵沒辦法判斷「整支都不通」還是「只有那顆不通」，
+   所以改成持續監聽並把收到的每一個事件都列出來。使用者把遙控器上每顆都按
+   一遍，畫面就會直接顯示哪些有訊號、送的是什麼鍵。
+   全部按完仍然掛零，才是真的沒送到瀏覽器。 */
+var learning=false, learnTimer=null, seen=[];
 function renderRemoteList(){
   var ks=S.remoteKeys||[];
   $("remoteList").innerHTML="<b>已學會的按鍵：</b>"+
     (ks.length?ks.map(function(k){ return "<code>"+esc(keyLabel(k))+"</code>"; }).join("、")
-              :"尚未學習（先試試看預設的 Enter／空白／上下鍵能不能用）");
+              :"尚未學習（先試試看預設的 Enter／空白／方向鍵／PageUp、PageDown 能不能用）");
 }
-function stopLearn(){
+function learnMsg(){
+  if(!seen.length){
+    setNote($("learnState"),
+      "<b>偵測中…把遙控器上每一顆按鍵都按一遍。</b><br>"+
+      "目前收到 <b>0</b> 個按鍵事件。按完全部仍是 0 就按「停止偵測」。","warn");
+    return;
+  }
+  setNote($("learnState"),
+    "<b>收到 "+seen.length+" 個按鍵事件：</b>"+
+    seen.map(function(s){
+      return "<code>"+esc(s.id)+"</code>"+(s.known?"（本來就支援）":"（已學起來）");
+    }).join("、")+
+    "<br>按完就按「停止偵測」。可以拍照的鍵會列在上面的「已學會的按鍵」裡。","ok");
+}
+function stopLearn(quiet){
   learning=false;
   if(learnTimer){ clearTimeout(learnTimer); learnTimer=null; }
-  $("btnLearnKey").textContent="學習遙控器按鍵";
+  $("btnLearnKey").textContent="偵測遙控器按鍵";
+  if(quiet) return;
+  if(!seen.length){
+    // 全部按過仍然掛零，才能下這個結論
+    setNote($("learnState"),
+      "<b>完全沒有收到任何按鍵事件。</b>代表遙控器送的是音量鍵或系統媒體鍵，"+
+      "手機不會把它交給網頁，任何網頁都攔不到——這不是本 App 的問題。<br><br>"+
+      "還可以試：<b>①</b> 遙控器側邊的 iOS／Android 開關切到 <b>Android</b> 那側，"+
+      "然後到手機藍牙設定「忘記此裝置」再重新配對（切模式後藍牙身分會變）。"+
+      "<b>②</b> 確認按的是<b>翻頁鍵</b>而不是拍照鍵——拍照鍵幾乎都是送音量鍵。"+
+      "<b>③</b> 確認遙控器真的連上了（藍牙設定裡顯示「已連線」而不只是「已配對」）。","warn");
+  }
 }
 function startLearn(){
-  if(learning){ stopLearn(); setNote($("learnState"),"已取消。"); return; }
-  learning=true;
-  $("btnLearnKey").textContent="取消";
-  setNote($("learnState"),"<b>現在按一下你的遙控器。</b>等待中…（20 秒後自動結束）","warn");
-  learnTimer=setTimeout(function(){
-    stopLearn();
-    // 完全收不到事件，就是音量鍵那條死路，講清楚免得一直重試
-    setNote($("learnState"),
-      "<b>20 秒內沒有收到任何按鍵。</b>代表遙控器送的是音量鍵，"+
-      "手機不會把它交給網頁，任何網頁都攔不到。"+
-      "請找遙控器側邊的 iOS／Android 模式開關，切到 <b>Android</b> 那側再試一次。","warn");
-  },20000);
+  if(learning){ stopLearn(); return; }
+  learning=true; seen=[];
+  $("btnLearnKey").textContent="停止偵測";
+  learnMsg();
+  learnTimer=setTimeout(function(){ stopLearn(); },90000);
 }
-document.addEventListener("keydown",function(e){
+// 用 window 的捕獲階段：這樣最早拿到事件，不會被別處攔掉而誤以為沒送到
+window.addEventListener("keydown",function(e){
   // 學習模式什麼都收，連帶修飾鍵的組合也收——有些翻頁器送的就是 Cmd＋方向鍵
   // 這種組合。這裡若先擋掉，學不到就會被誤報成「收不到任何按鍵」，
   // 把人導向「是音量鍵、無解」這個錯的結論。
@@ -2280,21 +2349,19 @@ document.addEventListener("keydown",function(e){
     var id=keyId(e);
     if(bareModifier(id)) return;   // 只按著修飾鍵，等真正那一下
     e.preventDefault();
-    stopLearn();
-    if(SHUTTER_KEYS[id]){
-      setNote($("learnState"),"收到 <code>"+esc(keyLabel(id))+"</code>。"+
-        "這個鍵本來就支援了——所以問題不在按鍵，請確認當時停在<b>拍照頁</b>、"+
-        "而且游標沒有停在輸入欄位裡。","ok");
-      return;
+    var known=!!SHUTTER_KEYS[id];
+    var dup=false;
+    for(var i=0;i<seen.length;i++) if(seen[i].id===id) dup=true;
+    if(!dup){
+      seen.push({id:keyLabel(id),known:known});
+      if(!known&&(S.remoteKeys||[]).indexOf(id)<0){
+        S.remoteKeys=(S.remoteKeys||[]).concat([id]);
+        writeJSON(SET_KEY,S);
+      }
+      renderRemoteList();
+      fb("ai");
     }
-    if((S.remoteKeys||[]).indexOf(id)<0){
-      S.remoteKeys=(S.remoteKeys||[]).concat([id]);
-      writeJSON(SET_KEY,S);
-    }
-    renderRemoteList();
-    setNote($("learnState"),"<b>學會了：</b><code>"+esc(keyLabel(id))+
-      "</code>。回拍照頁按遙控器試試看。","ok");
-    fb("ai");
+    learnMsg();
     return;
   }
 
@@ -2309,7 +2376,7 @@ document.addEventListener("keydown",function(e){
   if(!$("pShoot").classList.contains("on")) return;
   e.preventDefault();
   shoot();
-});
+},true);
 $("btnLearnKey").addEventListener("click",startLearn);
 $("btnClearKeys").addEventListener("click",function(){
   S.remoteKeys=[]; writeJSON(SET_KEY,S);
@@ -2351,6 +2418,7 @@ window.__pv={
   _zoom:pickZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
   _choices:zoomChoices, get cams(){ return cams.slice(); },
   get lensId(){ return lensId; }, _wideId:wideId, _autoWide:autoWideId,
+  _teleId:teleId, _autoTele:autoTeleId, _zoomText:zoomText,
   _fakeCams:function(list){ cams=list.slice(); renderCamList(); renderZoomBar(); },
   get uiZoom(){ return uiZoom; },
   get zoom(){ return zoomLevel; }, get digZoom(){ return digZoom; },
