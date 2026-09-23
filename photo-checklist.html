@@ -157,8 +157,10 @@
     #pShoot.on{
       display:grid;
       grid-template-columns:minmax(0,2fr) minmax(0,1fr);
-      grid-template-rows:auto auto minmax(0,1fr);
-      grid-template-areas:"cam now" "cam shutter" "cam items";
+      /* 快門放右欄最下面：橫拍是雙手握著，拇指自然落在螢幕下緣，
+         放中間得把手縮回來按，戴手套時更難對準。 */
+      grid-template-rows:auto minmax(0,1fr) auto;
+      grid-template-areas:"cam now" "cam items" "cam shutter";
       gap:7px;
       height:calc(100vh - 52px);
       height:calc(100dvh - 52px);
@@ -168,7 +170,7 @@
     #pShoot > .now .now-k{font-size:10px;letter-spacing:.1em;}
     #pShoot > .now .now-v{font-size:20px;}
     #pShoot > .now .now-meta{font-size:11px;margin-top:1px;}
-    #pShoot > .shutter{grid-area:shutter;margin:0;padding:14px 10px;font-size:17px;}
+    #pShoot > .shutter{grid-area:shutter;margin:0;padding:18px 10px;font-size:18px;}
     #pShoot > section{grid-area:items;margin:0;min-height:0;overflow-y:auto;}
     #pShoot > section .sec-head{display:none;}
     #pShoot > section .sec-body{padding:8px;}
@@ -233,7 +235,8 @@
           <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
         <p class="hint" id="remoteHint">
-          藍牙快門遙控器可直接按下拍照（Enter／空白／上下鍵皆可）。
+          藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
+          <b>第 9 區</b>讓它學一次你手上那支的按鍵。
           手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
         </p>
       </div>
@@ -467,6 +470,28 @@
         </div>
       </div>
     </section>
+
+    <section>
+      <div class="sec-head"><span class="num">9</span><h2>藍牙遙控器</h2></div>
+      <div class="sec-body">
+        <p class="hint" style="margin-top:0">
+          遙控器對手機來說就是一個鍵盤，但每一支送出的按鍵都不一樣。
+          按了沒反應，多半只是它送的那個鍵不在預設清單裡——按下面的按鈕讓它學一次就好。
+        </p>
+        <div class="note" id="remoteList"><b>已學會的按鍵：</b>尚未學習</div>
+        <div class="btnrow">
+          <button class="b1" id="btnLearnKey" type="button">學習遙控器按鍵</button>
+          <button class="b2 b-sm b-danger" id="btnClearKeys" type="button">清除</button>
+        </div>
+        <div class="note hidden" id="learnState"></div>
+        <p class="hint">
+          <b>如果按了完全沒反應、畫面也收不到任何按鍵：</b>那不是設定問題，是你的遙控器
+          送的是<b>音量鍵</b>——iOS 與 Android 都不會把音量鍵交給網頁，任何網頁都攔不到。
+          多數遙控器側邊有 <b>iOS／Android 模式開關</b>，切到 <b>Android</b> 那側通常會改送
+          Enter，就收得到了。切了還是沒反應的話，這支遙控器沒辦法用在網頁上。
+        </p>
+      </div>
+    </section>
   </div>
 
   <footer id="ver">—</footer>
@@ -576,7 +601,8 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   model:"",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
   exclude:[],        // 訓練時要排除哪些人的樣本
-  vib:true, snd:true};  // 拍照回饋：震動、快門聲
+  vib:true, snd:true,   // 拍照回饋：震動、快門聲
+  remoteKeys:[]};       // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
 
 var S=readJSON(SET_KEY,DEFAULT_SET);
 if(ownerNames().indexOf(S.owner)<0) S.owner=OWNERS[0].name;
@@ -1669,6 +1695,7 @@ function fillForms(){
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
+  renderRemoteList();
 }
 // 震動在 iOS Safari 上不存在，寧可先講明白，不要讓人以為是壞了
 function renderFbState(){
@@ -1897,7 +1924,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-21b";
+var APP_VERSION="2026-09-23a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -1965,19 +1992,95 @@ $("btnFlip").addEventListener("click",function(){
   facing=(facing==="environment")?"user":"environment"; startCam();
 });
 
-// 藍牙快門遙控器對手機而言是鍵盤，按鍵因廠牌而異，常見的都收。
-// 手機本身的音量鍵不會產生鍵盤事件，網頁無法攔截。
+/* ═══════════ 藍牙快門遙控器 ═══════════
+   遙控器對手機而言就是鍵盤，但各廠牌送的按鍵不一樣，光靠預設清單一定會漏。
+   所以除了常見的之外，另外提供「學一次」：按下遙控器，把它送的鍵記起來。
+   手機本身的音量鍵不會產生鍵盤事件，網頁一律攔不到，這點學不起來。 */
 var SHUTTER_KEYS={"Enter":1," ":1,"Spacebar":1,"ArrowUp":1,"ArrowDown":1,
   "AudioVolumeUp":1,"AudioVolumeDown":1,"VolumeUp":1,"VolumeDown":1,"MediaPlayPause":1};
+
+// 有些遙控器的 e.key 是 Unidentified，只有 code 或 keyCode 認得出來，都要能存
+function keyId(e){
+  if(e.key&&e.key!=="Unidentified") return e.key;
+  if(e.code) return "code:"+e.code;
+  return "kc:"+(e.keyCode||0);
+}
+function keyLabel(id){
+  if(id===" ") return "空白鍵";
+  if(id.indexOf("code:")===0||id.indexOf("kc:")===0) return id;
+  return id;
+}
+function isShutterKey(e){
+  var id=keyId(e);
+  return !!SHUTTER_KEYS[id]||(S.remoteKeys||[]).indexOf(id)>=0;
+}
+
+var learning=false, learnTimer=null;
+function renderRemoteList(){
+  var ks=S.remoteKeys||[];
+  $("remoteList").innerHTML="<b>已學會的按鍵：</b>"+
+    (ks.length?ks.map(function(k){ return "<code>"+esc(keyLabel(k))+"</code>"; }).join("、")
+              :"尚未學習（先試試看預設的 Enter／空白／上下鍵能不能用）");
+}
+function stopLearn(){
+  learning=false;
+  if(learnTimer){ clearTimeout(learnTimer); learnTimer=null; }
+  $("btnLearnKey").textContent="學習遙控器按鍵";
+}
+function startLearn(){
+  if(learning){ stopLearn(); setNote($("learnState"),"已取消。"); return; }
+  learning=true;
+  $("btnLearnKey").textContent="取消";
+  setNote($("learnState"),"<b>現在按一下你的遙控器。</b>等待中…（20 秒後自動結束）","warn");
+  learnTimer=setTimeout(function(){
+    stopLearn();
+    // 完全收不到事件，就是音量鍵那條死路，講清楚免得一直重試
+    setNote($("learnState"),
+      "<b>20 秒內沒有收到任何按鍵。</b>代表遙控器送的是音量鍵，"+
+      "手機不會把它交給網頁，任何網頁都攔不到。"+
+      "請找遙控器側邊的 iOS／Android 模式開關，切到 <b>Android</b> 那側再試一次。","warn");
+  },20000);
+}
 document.addEventListener("keydown",function(e){
-  if(e.repeat||e.metaKey||e.ctrlKey||e.altKey) return;
-  if(!SHUTTER_KEYS[e.key]) return;
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+
+  // 學習模式：什麼鍵都收，連沒看過的也收，這樣才學得到
+  if(learning){
+    if(e.repeat) return;
+    var id=keyId(e);
+    e.preventDefault();
+    stopLearn();
+    if(SHUTTER_KEYS[id]){
+      setNote($("learnState"),"收到 <code>"+esc(keyLabel(id))+"</code>。"+
+        "這個鍵本來就支援了——所以問題不在按鍵，請確認當時停在<b>拍照頁</b>、"+
+        "而且游標沒有停在輸入欄位裡。","ok");
+      return;
+    }
+    if((S.remoteKeys||[]).indexOf(id)<0){
+      S.remoteKeys=(S.remoteKeys||[]).concat([id]);
+      writeJSON(SET_KEY,S);
+    }
+    renderRemoteList();
+    setNote($("learnState"),"<b>學會了：</b><code>"+esc(keyLabel(id))+
+      "</code>。回拍照頁按遙控器試試看。","ok");
+    fb("ai");
+    return;
+  }
+
+  if(e.repeat) return;
+  if(!isShutterKey(e)) return;
   var t=e.target;
   if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return;
   if(t&&t.tagName==="BUTTON"&&t!==$("shutter")) return;   // 讓鍵盤仍能操作其他按鈕
   if(!$("pShoot").classList.contains("on")) return;
   e.preventDefault();
   shoot();
+});
+$("btnLearnKey").addEventListener("click",startLearn);
+$("btnClearKeys").addEventListener("click",function(){
+  S.remoteKeys=[]; writeJSON(SET_KEY,S);
+  renderRemoteList();
+  setNote($("learnState"),"已清除學過的按鍵，回到預設清單。");
 });
 window.addEventListener("pagehide",stopCam);
 
@@ -2011,6 +2114,8 @@ window.__pv={
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   _fb:fb, _canVib:canVib, _fbPattern:FB,
+  _keyId:keyId, _isShutterKey:isShutterKey, _learn:startLearn,
+  get learning(){ return learning; }, get remoteKeys(){ return (S.remoteKeys||[]).slice(); },
   get fbLog(){ return fbLog.slice(); }, _fbClear:function(){ fbLog.length=0; },
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
