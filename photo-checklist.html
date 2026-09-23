@@ -536,8 +536,15 @@
           切完要<b>重新配對</b>：先到手機藍牙設定把它「忘記此裝置」，再重新連一次——
           切模式後藍牙身分常會變，不重配會連到舊的。<br><br>
           <b>切了還是收不到，就換一支「藍牙簡報筆（翻頁筆）」。</b>它送的是
-          PageUp／PageDown，是正規鍵盤按鍵，網頁收得到，本 App 預設就支援。
-          相機遙控器多半只送音量鍵，網頁永遠用不了。
+          PageUp／PageDown 或方向鍵，是正規鍵盤按鍵，網頁收得到，本 App 預設就支援。
+          相機遙控器多半只送音量鍵，網頁永遠用不了。<br><br>
+          <b>翻頁器上若有「拍照」那顆，通常反而不能用</b>——那顆多半送音量鍵。
+          請用<b>翻頁</b>那兩顆。
+        </div>
+        <div class="note">
+          帶修飾鍵的組合（例如 Cmd＋方向鍵，部分翻頁器在 iOS 模式會這樣送）
+          也學得起來。預設不收這類組合，免得 Ctrl+A 之類的操作誤觸；
+          但你親手學給它記的，就會生效。
         </div>
       </div>
     </section>
@@ -2128,7 +2135,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23d";
+var APP_VERSION="2026-09-23e";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2210,9 +2217,23 @@ var SHUTTER_KEYS={"Enter":1," ":1,"Spacebar":1,"ArrowUp":1,"ArrowDown":1,
 
 // 有些遙控器的 e.key 是 Unidentified，只有 code 或 keyCode 認得出來，都要能存
 function keyId(e){
-  if(e.key&&e.key!=="Unidentified") return e.key;
-  if(e.code) return "code:"+e.code;
-  return "kc:"+(e.keyCode||0);
+  var base;
+  if(e.key&&e.key!=="Unidentified") base=e.key;
+  else if(e.code) base="code:"+e.code;
+  else base="kc:"+(e.keyCode||0);
+  // 修飾鍵本身被按下時還不是一個組合，等真正那一下再算
+  if(base==="Meta"||base==="Control"||base==="Alt"||base==="Shift") return base;
+  // 有些翻頁器（尤其 iOS 模式）送的是 Cmd＋方向鍵這種組合，
+  // 只記 base 會把不同按鈕記成同一個，所以修飾鍵要一起記
+  var pre="";
+  if(e.metaKey) pre+="Meta+";
+  if(e.ctrlKey) pre+="Control+";
+  if(e.altKey) pre+="Alt+";
+  if(e.shiftKey) pre+="Shift+";
+  return pre+base;
+}
+function bareModifier(id){
+  return id==="Meta"||id==="Control"||id==="Alt"||id==="Shift";
 }
 function keyLabel(id){
   if(id===" ") return "空白鍵";
@@ -2251,12 +2272,13 @@ function startLearn(){
   },20000);
 }
 document.addEventListener("keydown",function(e){
-  if(e.metaKey||e.ctrlKey||e.altKey) return;
-
-  // 學習模式：什麼鍵都收，連沒看過的也收，這樣才學得到
+  // 學習模式什麼都收，連帶修飾鍵的組合也收——有些翻頁器送的就是 Cmd＋方向鍵
+  // 這種組合。這裡若先擋掉，學不到就會被誤報成「收不到任何按鍵」，
+  // 把人導向「是音量鍵、無解」這個錯的結論。
   if(learning){
     if(e.repeat) return;
     var id=keyId(e);
+    if(bareModifier(id)) return;   // 只按著修飾鍵，等真正那一下
     e.preventDefault();
     stopLearn();
     if(SHUTTER_KEYS[id]){
@@ -2277,6 +2299,9 @@ document.addEventListener("keydown",function(e){
   }
 
   if(e.repeat) return;
+  // 預設清單只認沒有修飾鍵的按鍵，免得 Ctrl+A 這類操作也拍照；
+  // 但學起來的組合是使用者親手按給它記的，就要生效
+  if((e.metaKey||e.ctrlKey||e.altKey)&&(S.remoteKeys||[]).indexOf(keyId(e))<0) return;
   if(!isShutterKey(e)) return;
   var t=e.target;
   if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"||t.isContentEditable)) return;
