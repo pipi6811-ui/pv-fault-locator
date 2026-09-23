@@ -546,11 +546,14 @@
           所以就算你用 iPhone，也要切到 Android 那側。<br><br>
           切完要<b>重新配對</b>：先到手機藍牙設定把它「忘記此裝置」，再重新連一次——
           切模式後藍牙身分常會變，不重配會連到舊的。<br><br>
-          <b>切了還是收不到，就換一支「藍牙簡報筆（翻頁筆）」。</b>它送的是
-          PageUp／PageDown 或方向鍵，是正規鍵盤按鍵，網頁收得到，本 App 預設就支援。
-          相機遙控器多半只送音量鍵，網頁永遠用不了。<br><br>
-          <b>翻頁器上若有「拍照」那顆，通常反而不能用</b>——那顆多半送音量鍵。
-          請用<b>翻頁</b>那兩顆。
+          <b>標著 Shutter／Play/Pause／音量的按鍵一律沒用</b>——那些是多媒體鍵，
+          手機自己處理掉。<b>Play/Pause 按了會放音樂，只證明遙控器連上了，
+          不代表按鍵有送到網頁。</b>請按<b>翻頁鍵</b>（Page Up／Down／左／右）。<br><br>
+          <b>判定是硬體還是網頁的問題：</b>打開備忘錄新增一則，點進去讓游標在閃，
+          再按翻頁鍵。游標會動＝它確實是鍵盤，問題在網頁端；完全沒反應＝這支在
+          這支手機上根本不是鍵盤，換一支才有解。<br><br>
+          有些遙控器用<b>功能鍵（Universal／Fn）長按或組合</b>切換模式，不是側邊開關；
+          切完要到藍牙設定「忘記此裝置」再重新配對。
         </div>
         <div class="note">
           帶修飾鍵的組合（例如 Cmd＋方向鍵，部分翻頁器在 iOS 模式會這樣送）
@@ -2181,7 +2184,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23f";
+var APP_VERSION="2026-09-23g";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2295,7 +2298,16 @@ function isShutterKey(e){
    所以改成持續監聽並把收到的每一個事件都列出來。使用者把遙控器上每顆都按
    一遍，畫面就會直接顯示哪些有訊號、送的是什麼鍵。
    全部按完仍然掛零，才是真的沒送到瀏覽器。 */
-var learning=false, learnTimer=null, seen=[];
+var learning=false, learnTimer=null, seen=[], otherEvt=[];
+/* keydown 之外的事件也記一筆。若 keyup 有、keydown 沒有，那是完全不同的毛病，
+   跟「什麼都沒收到」必須分得開，否則又會導向錯的結論。 */
+["keyup","keypress"].forEach(function(t){
+  window.addEventListener(t,function(e){
+    if(!learning) return;
+    var tag=t+":"+keyId(e);
+    if(otherEvt.indexOf(tag)<0){ otherEvt.push(tag); learnMsg(); }
+  },true);
+});
 function renderRemoteList(){
   var ks=S.remoteKeys||[];
   $("remoteList").innerHTML="<b>已學會的按鍵：</b>"+
@@ -2303,17 +2315,19 @@ function renderRemoteList(){
               :"尚未學習（先試試看預設的 Enter／空白／方向鍵／PageUp、PageDown 能不能用）");
 }
 function learnMsg(){
+  var other=otherEvt.length?"<br>另外收到（非 keydown）："+
+    otherEvt.map(function(o){ return "<code>"+esc(o)+"</code>"; }).join("、"):"";
   if(!seen.length){
     setNote($("learnState"),
       "<b>偵測中…把遙控器上每一顆按鍵都按一遍。</b><br>"+
-      "目前收到 <b>0</b> 個按鍵事件。按完全部仍是 0 就按「停止偵測」。","warn");
+      "目前收到 <b>0</b> 個按鍵事件。按完全部仍是 0 就按「停止偵測」。"+other,"warn");
     return;
   }
   setNote($("learnState"),
     "<b>收到 "+seen.length+" 個按鍵事件：</b>"+
     seen.map(function(s){
       return "<code>"+esc(s.id)+"</code>"+(s.known?"（本來就支援）":"（已學起來）");
-    }).join("、")+
+    }).join("、")+other+
     "<br>按完就按「停止偵測」。可以拍照的鍵會列在上面的「已學會的按鍵」裡。","ok");
 }
 function stopLearn(quiet){
@@ -2325,16 +2339,18 @@ function stopLearn(quiet){
     // 全部按過仍然掛零，才能下這個結論
     setNote($("learnState"),
       "<b>完全沒有收到任何按鍵事件。</b>代表遙控器送的是音量鍵或系統媒體鍵，"+
-      "手機不會把它交給網頁，任何網頁都攔不到——這不是本 App 的問題。<br><br>"+
-      "還可以試：<b>①</b> 遙控器側邊的 iOS／Android 開關切到 <b>Android</b> 那側，"+
-      "然後到手機藍牙設定「忘記此裝置」再重新配對（切模式後藍牙身分會變）。"+
-      "<b>②</b> 確認按的是<b>翻頁鍵</b>而不是拍照鍵——拍照鍵幾乎都是送音量鍵。"+
-      "<b>③</b> 確認遙控器真的連上了（藍牙設定裡顯示「已連線」而不只是「已配對」）。","warn");
+      "手機自己處理掉、不會交給網頁，任何網頁都攔不到——這不是本 App 的問題。<br><br>"+
+      "<b>先做這個判定，不要再在這裡試：</b>打開<b>備忘錄</b>新增一則，點進去讓游標在閃，"+
+      "再按遙控器的<b>翻頁鍵</b>。游標會動或畫面會捲，代表它確實是鍵盤、問題在網頁端，"+
+      "回來告訴我；完全沒反應，代表這支在這支手機上不是鍵盤，<b>換一支才有解</b>。<br><br>"+
+      "另外：標著 <b>Shutter</b>、<b>Play/Pause</b>、<b>音量</b> 的按鍵一律沒用，"+
+      "那些是多媒體鍵。有些遙控器用<b>功能鍵（Universal／Fn）長按或組合</b>切換模式，"+
+      "切完要到藍牙設定「忘記此裝置」再重新配對。","warn");
   }
 }
 function startLearn(){
   if(learning){ stopLearn(); return; }
-  learning=true; seen=[];
+  learning=true; seen=[]; otherEvt=[];
   $("btnLearnKey").textContent="停止偵測";
   learnMsg();
   learnTimer=setTimeout(function(){ stopLearn(); },90000);
