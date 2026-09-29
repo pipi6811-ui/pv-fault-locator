@@ -860,7 +860,7 @@ window.addEventListener("pageshow",wakeCam);
    出來時，設定頁可以手動指定。 */
 var ZOOM_LEVELS=[1,2,4];
 var zoomLevel=1, zoomCaps=null, digZoom=1;
-var cams=[], lensId=null, uiZoom=1;
+var cams=[], lensId=null, uiZoom=1, lensErr="";
 var WIDE_RE=/ultra.?wide|超廣角|超廣角鏡頭|0\.5/i;
 // 望遠鏡頭是真的光學變焦，畫質不打折，比裁切放大好得多。
 // 但它的實際倍率各機型不同（2×／3×／5× 都有），名稱裡沒寫、程式也量不出來，
@@ -945,6 +945,7 @@ function pickZoom(level){
   var want=lensFor(level)||null;
   if(want!==lensId){
     // 換鏡頭要重開串流；uiZoom 先記著，startCam 成功後再套用
+    lensErr="";                       // 這是新的一次嘗試，先把上次的失敗訊息清掉
     lensId=want; uiZoom=level; startCam();
     return;
   }
@@ -972,7 +973,8 @@ function zoomKind(){
     : (zoomCaps
       ? "拉近：鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補"
       : "拉近：裁切放大（不支援鏡頭變焦，倍率越高畫質越差）");
-  return wide+"；"+zin;
+  // 切鏡頭失敗過就一定要說出來，否則使用者只看到按鈕沒反應
+  return wide+"；"+zin+(lensErr?"　⚠️ "+lensErr:"");
 }
 function trimLabel(s){ return String(s||"").replace(/\s*\([0-9a-f:]{4,}\)\s*$/i,"").trim()||"未命名鏡頭"; }
 function renderCamList(){
@@ -982,7 +984,10 @@ function renderCamList(){
       var mark=(c.deviceId===wideId())?"（用作廣角）"
               :(c.deviceId===teleId())?"（用作望遠）":"";
       return "<code>"+esc(trimLabel(c.label))+"</code>"+mark;
-    }).join("、"):"尚未偵測（要先允許相機權限）");
+    }).join("、"):"尚未偵測（要先允許相機權限）")+
+    (lensErr?"<br><b>⚠️ 上次切換失敗：</b>"+esc(lensErr)+
+      "<br>代表這支手機的瀏覽器不讓網頁單獨開這顆鏡頭。可以在下面改指定別顆試試看；"+
+      "都失敗就是拿不到，不是設定問題。":"");
   fillLensSel($("sWideCam"),S.wideCam,autoWideId(),"不要 0.5× 這一檔");
   fillLensSel($("sTeleCam"),S.teleCam,autoTeleId(),"不要「望遠」這一檔");
 }
@@ -1024,10 +1029,16 @@ function startCam(){
   }).then(function(){
     camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
     readZoomCaps();
-    // 指定鏡頭時 uiZoom 已經在 pickZoom 設好；一般啟動才歸位，
-    // 免得沿用上一顆鏡頭的倍率
-    if(!lensId&&uiZoom<1) uiZoom=1;
-    applyZoom(uiZoom<1?1:uiZoom);
+    // lensErr 不在這裡清掉：切換失敗會退回一般鏡頭再啟動一次，
+    // 在這裡清等於把失敗原因抹掉，畫面又變回什麼都沒說。
+    // 使用者下次主動按鏡頭鈕時才清（在 pickZoom 裡）。
+
+    // 指定鏡頭時 uiZoom 已經在 pickZoom 設好；沒指定到鏡頭卻停在
+    // 0.5×／望遠，代表剛剛那次切換失敗了，倍率要跟著回到 1×
+    if(!lensId&&lensFor(uiZoom)) uiZoom=1;
+    // 一定要經過 mulFor：uiZoom 可能是字串 "tele"，直接丟進 applyZoom
+    // 會算出 digZoom = "tele"/1 = NaN，之後的裁切與預覽全部失準
+    applyZoom(mulFor(uiZoom));
     return listCams();
   }).then(function(){
     renderZoomBar();
@@ -1037,9 +1048,15 @@ function startCam(){
     var msg="相機打不開："+(err&&err.message?err.message:m);
     if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
     if(m==="NotFoundError") msg="找不到相機裝置。";
-    // 指定的鏡頭開不起來（裝置清單變了、或這顆不給獨立使用）就退回一般鏡頭，
-    // 不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多
-    if(lensId){ lensId=null; uiZoom=1; startCam(); return; }
+    /* 指定的鏡頭開不起來（裝置清單變了、或這顆不給單獨使用）就退回一般鏡頭，
+       不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多。
+       但一定要留下原因：先前這裡是靜默退回，使用者按 0.5× 只看到「沒反應」，
+       完全查不出是哪個環節失敗。 */
+    if(lensId){
+      var who=camById(lensId);
+      lensErr=(who?trimLabel(who.label):"指定的鏡頭")+"：開不起來（"+(m||"未知錯誤")+"）";
+      lensId=null; uiZoom=1; startCam(); return;
+    }
     $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
   });
 }
@@ -2242,7 +2259,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-29a";
+var APP_VERSION="2026-09-29b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2508,6 +2525,7 @@ window.__pv={
   _choices:zoomChoices, get cams(){ return cams.slice(); },
   get lensId(){ return lensId; }, _wideId:wideId, _autoWide:autoWideId,
   _teleId:teleId, _autoTele:autoTeleId, _zoomText:zoomText,
+  get lensErr(){ return lensErr; }, _mulFor:mulFor,
   _fakeCams:function(list){ cams=list.slice(); renderCamList(); renderZoomBar(); },
   get uiZoom(){ return uiZoom; },
   get zoom(){ return zoomLevel; }, get digZoom(){ return digZoom; },
