@@ -80,10 +80,23 @@
     .zoombar{bottom:5px;padding:4px;gap:4px;}
     .zoombar button{min-width:40px;min-height:40px;font-size:13px;}
   }
-  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;}
-  .flash.go{animation:fl .32s ease-out;}
-  @keyframes fl{from{opacity:.85;}to{opacity:0;}}
-  @media (prefers-reduced-motion:reduce){.flash.go{animation:none;}}
+  /* 拍照確認。原本是白色淡出，但烈日下螢幕本來就全亮，白蓋白幾乎沒有對比，
+     現場根本看不到。改成先壓暗再收掉，並鑲一圈粗的警示色邊框——暗轉亮的
+     變化在強光下最明顯，邊框則讓視線餘光也接得到。 */
+  .flash{position:absolute;inset:0;opacity:0;pointer-events:none;
+    background:rgba(0,0,0,.62);border:10px solid var(--hazard);border-radius:10px;}
+  .flash.go{animation:fl .42s ease-out;}
+  @keyframes fl{0%{opacity:1;}60%{opacity:.85;}100%{opacity:0;}}
+  /* 中央再放一個大勾。文字與符號在反光下比色塊耐看得多。 */
+  .flash-ok{position:absolute;inset:0;display:grid;place-items:center;
+    font-size:84px;font-weight:900;color:var(--hazard);opacity:0;pointer-events:none;
+    text-shadow:0 2px 14px rgba(0,0,0,.9);}
+  .flash-ok.go{animation:fl .42s ease-out;}
+  /* 開了「減少動態」時不要整個關掉——這是功能性回饋不是裝飾，
+     關掉等於現場少一個確認管道。改成不帶緩動的短暫顯示。 */
+  @media (prefers-reduced-motion:reduce){
+    .flash.go,.flash-ok.go{animation:fl .3s steps(2,end);}
+  }
 
   .shutter{width:100%;margin-top:10px;padding:20px 16px;font-size:20px;font-weight:800;
     font-family:var(--sans);border:2px solid var(--ink);border-radius:12px;
@@ -231,6 +244,7 @@
     <div class="cam" id="camBox">
       <video id="video" playsinline muted autoplay></video>
       <div class="flash" id="flash"></div>
+      <div class="flash-ok" id="flashOk">✓</div>
       <div class="cam-msg" id="camMsg">相機啟動中…</div>
       <div class="ai-chip hidden" id="aiChip">AI 待命</div>
       <div class="zoombar" id="zoomBar"></div>
@@ -354,11 +368,14 @@
         </div>
         <p class="hint" style="margin-top:0">
           大太陽下螢幕常常看不清楚，戴手套也感覺不到按鈕有沒有按到。
-          開著下面兩項，不用盯螢幕也知道有沒有拍進去。
+          開著下面三項，不用盯螢幕也知道有沒有拍進去。
+          <b>現場太吵聽不到快門聲時，「畫面閃一下」是最後一道確認</b>——
+          成功閃黃框加勾，失敗閃紅框加叉，不必看字就分得出來。
         </p>
         <div class="field">
           <label class="chk"><input id="sVib" type="checkbox"><span>震動</span></label>
           <label class="chk"><input id="sSnd" type="checkbox"><span>快門聲</span></label>
+          <label class="chk"><input id="sFlash" type="checkbox"><span>畫面閃一下</span></label>
         </div>
         <div class="btnrow">
           <button class="b2" id="btnFbTest" type="button">試一下</button>
@@ -680,7 +697,7 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   model:"",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
   exclude:[],        // 訓練時要排除哪些人的樣本
-  vib:true, snd:true,   // 拍照回饋：震動、快門聲
+  vib:true, snd:true, flash:true,   // 拍照回饋：震動、快門聲、畫面閃一下
   remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
   tapShoot:true,        // 點取景畫面就拍照
   wideCam:"",           // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
@@ -860,7 +877,7 @@ window.addEventListener("pageshow",wakeCam);
    出來時，設定頁可以手動指定。 */
 var ZOOM_LEVELS=[1,2,4];
 var zoomLevel=1, zoomCaps=null, digZoom=1;
-var cams=[], lensId=null, uiZoom=1;
+var cams=[], lensId=null, uiZoom=1, lensErr="";
 var WIDE_RE=/ultra.?wide|超廣角|超廣角鏡頭|0\.5/i;
 // 望遠鏡頭是真的光學變焦，畫質不打折，比裁切放大好得多。
 // 但它的實際倍率各機型不同（2×／3×／5× 都有），名稱裡沒寫、程式也量不出來，
@@ -945,6 +962,7 @@ function pickZoom(level){
   var want=lensFor(level)||null;
   if(want!==lensId){
     // 換鏡頭要重開串流；uiZoom 先記著，startCam 成功後再套用
+    lensErr="";                       // 這是新的一次嘗試，先把上次的失敗訊息清掉
     lensId=want; uiZoom=level; startCam();
     return;
   }
@@ -972,7 +990,8 @@ function zoomKind(){
     : (zoomCaps
       ? "拉近：鏡頭變焦（最高 "+zoomCaps.max+"×）＋不足處用裁切補"
       : "拉近：裁切放大（不支援鏡頭變焦，倍率越高畫質越差）");
-  return wide+"；"+zin;
+  // 切鏡頭失敗過就一定要說出來，否則使用者只看到按鈕沒反應
+  return wide+"；"+zin+(lensErr?"　⚠️ "+lensErr:"");
 }
 function trimLabel(s){ return String(s||"").replace(/\s*\([0-9a-f:]{4,}\)\s*$/i,"").trim()||"未命名鏡頭"; }
 function renderCamList(){
@@ -982,7 +1001,10 @@ function renderCamList(){
       var mark=(c.deviceId===wideId())?"（用作廣角）"
               :(c.deviceId===teleId())?"（用作望遠）":"";
       return "<code>"+esc(trimLabel(c.label))+"</code>"+mark;
-    }).join("、"):"尚未偵測（要先允許相機權限）");
+    }).join("、"):"尚未偵測（要先允許相機權限）")+
+    (lensErr?"<br><b>⚠️ 上次切換失敗：</b>"+esc(lensErr)+
+      "<br>代表這支手機的瀏覽器不讓網頁單獨開這顆鏡頭。可以在下面改指定別顆試試看；"+
+      "都失敗就是拿不到，不是設定問題。":"");
   fillLensSel($("sWideCam"),S.wideCam,autoWideId(),"不要 0.5× 這一檔");
   fillLensSel($("sTeleCam"),S.teleCam,autoTeleId(),"不要「望遠」這一檔");
 }
@@ -1024,10 +1046,16 @@ function startCam(){
   }).then(function(){
     camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
     readZoomCaps();
-    // 指定鏡頭時 uiZoom 已經在 pickZoom 設好；一般啟動才歸位，
-    // 免得沿用上一顆鏡頭的倍率
-    if(!lensId&&uiZoom<1) uiZoom=1;
-    applyZoom(uiZoom<1?1:uiZoom);
+    // lensErr 不在這裡清掉：切換失敗會退回一般鏡頭再啟動一次，
+    // 在這裡清等於把失敗原因抹掉，畫面又變回什麼都沒說。
+    // 使用者下次主動按鏡頭鈕時才清（在 pickZoom 裡）。
+
+    // 指定鏡頭時 uiZoom 已經在 pickZoom 設好；沒指定到鏡頭卻停在
+    // 0.5×／望遠，代表剛剛那次切換失敗了，倍率要跟著回到 1×
+    if(!lensId&&lensFor(uiZoom)) uiZoom=1;
+    // 一定要經過 mulFor：uiZoom 可能是字串 "tele"，直接丟進 applyZoom
+    // 會算出 digZoom = "tele"/1 = NaN，之後的裁切與預覽全部失準
+    applyZoom(mulFor(uiZoom));
     return listCams();
   }).then(function(){
     renderZoomBar();
@@ -1037,9 +1065,15 @@ function startCam(){
     var msg="相機打不開："+(err&&err.message?err.message:m);
     if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
     if(m==="NotFoundError") msg="找不到相機裝置。";
-    // 指定的鏡頭開不起來（裝置清單變了、或這顆不給獨立使用）就退回一般鏡頭，
-    // 不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多
-    if(lensId){ lensId=null; uiZoom=1; startCam(); return; }
+    /* 指定的鏡頭開不起來（裝置清單變了、或這顆不給單獨使用）就退回一般鏡頭，
+       不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多。
+       但一定要留下原因：先前這裡是靜默退回，使用者按 0.5× 只看到「沒反應」，
+       完全查不出是哪個環節失敗。 */
+    if(lensId){
+      var who=camById(lensId);
+      lensErr=(who?trimLabel(who.label):"指定的鏡頭")+"：開不起來（"+(m||"未知錯誤")+"）";
+      lensId=null; uiZoom=1; startCam(); return;
+    }
     $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
   });
 }
@@ -1565,10 +1599,25 @@ var FB={
   ai  :{vib:[0,25,70,25], snd:"ai"},  // AI 把項目改掉了，看一眼
   err :{vib:[0,220,120,220], snd:"err"}  // 沒存進去
 };
+/* 畫面閃一下。現場太吵時聽不到快門聲，這是唯一還留著的確認管道，
+   所以成功與失敗要閃得不一樣——失敗閃紅，不必看字也知道出事了。 */
+function flashScreen(kind){
+  if(!S.flash) return false;
+  var el=$("flash"), okEl=$("flashOk");
+  if(!el||!okEl) return false;
+  var bad=(kind==="err");
+  el.style.borderColor=bad?"#d63b2f":"";
+  okEl.style.color=bad?"#d63b2f":"";
+  okEl.textContent=bad?"✕":"✓";
+  [el,okEl].forEach(function(n){
+    n.classList.remove("go"); void n.offsetWidth; n.classList.add("go");
+  });
+  return true;
+}
 function fb(kind){
   var f=FB[kind]; if(!f) return;
-  var v=vib(f.vib), s=snd(f.snd);
-  fbLog.push({kind:kind,vib:v,snd:s});
+  var v=vib(f.vib), s=snd(f.snd), fl=flashScreen(kind);
+  fbLog.push({kind:kind,vib:v,snd:s,flash:fl});
   if(fbLog.length>50) fbLog.shift();
 }
 
@@ -1583,8 +1632,6 @@ function shoot(){
      把 busy 放掉的 .then() 也永遠不會跑——快門就此鎖死，只能重新整理才救得回來。
      相機被系統收走之後對死掉的串流 drawImage 正是會走到這裡。 */
   try{
-    var f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
-
     // 串流可能已經死了而沒觸發 ended（track.stop() 依規格就不發這個事件）。
     // 拍照當下直接問它還活不活著，是唯一擋得住「拍出一張黑畫面」的地方。
     var tr=videoTrack();
@@ -1993,7 +2040,7 @@ function fillForms(){
   $("nPass").value=NAS.remember?NAS.pass:"";
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
-  $("sTapShoot").checked=!!S.tapShoot;
+  $("sTapShoot").checked=!!S.tapShoot; $("sFlash").checked=!!S.flash;
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
 }
@@ -2015,7 +2062,9 @@ function renderFbState(){
     ? "<b>這支手機支援震動。</b>"
     : "<b>這支手機不支援震動</b>（iPhone 的 Safari 一律不支援，不是設定壞掉）。";
   msg+="快門聲走媒體音量，"+
-       "iPhone 側邊靜音鍵切到靜音時不會出聲。";
+       "iPhone 側邊靜音鍵切到靜音時不會出聲。"+
+       "<b>「畫面閃一下」不受靜音鍵和機型影響</b>，"+
+       "現場吵或手機靜音時就靠它確認。";
   setNote($("fbState"),msg,canVib()?"ok":"warn");
 }
 // 換業主＝換整組檢查項目，拍照頁要跟著重畫
@@ -2051,6 +2100,9 @@ $("sVib").addEventListener("change",function(){
 });
 $("sTapShoot").addEventListener("change",function(){
   S.tapShoot=$("sTapShoot").checked; writeJSON(SET_KEY,S);
+});
+$("sFlash").addEventListener("change",function(){
+  S.flash=$("sFlash").checked; writeJSON(SET_KEY,S); if(S.flash) flashScreen("shot");
 });
 $("sSnd").addEventListener("change",function(){
   S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
@@ -2242,7 +2294,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-29a";
+var APP_VERSION="2026-09-29c";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2503,11 +2555,12 @@ window.__pv={
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
-  _fb:fb, _canVib:canVib, _fbPattern:FB,
+  _fb:fb, _canVib:canVib, _fbPattern:FB, _flash:flashScreen,
   _zoom:pickZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
   _choices:zoomChoices, get cams(){ return cams.slice(); },
   get lensId(){ return lensId; }, _wideId:wideId, _autoWide:autoWideId,
   _teleId:teleId, _autoTele:autoTeleId, _zoomText:zoomText,
+  get lensErr(){ return lensErr; }, _mulFor:mulFor,
   _fakeCams:function(list){ cams=list.slice(); renderCamList(); renderZoomBar(); },
   get uiZoom(){ return uiZoom; },
   get zoom(){ return zoomLevel; }, get digZoom(){ return digZoom; },
