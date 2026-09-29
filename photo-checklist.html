@@ -65,6 +65,11 @@
   .cam video{width:100%;height:100%;object-fit:cover;display:block;}
   .cam-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;
     color:#fff;font-size:13px;font-weight:600;padding:20px;background:#000;}
+  .cam-msg b{font-size:15px;}
+  /* 相機打不開時唯一的出路。先前這裡只有一行英文，只能重新整理才救得回來。 */
+  .cam-retry{margin-top:14px;padding:14px 26px;font-size:17px;font-weight:800;
+    font-family:var(--sans);border:2px solid var(--hazard);border-radius:10px;
+    background:var(--hazard);color:var(--ink);cursor:pointer;}
   .ai-chip{position:absolute;left:8px;top:8px;background:rgba(0,0,0,.72);color:#fff;
     padding:5px 9px;border-radius:6px;font-size:12px;font-weight:700;}
   /* 變焦列疊在畫面上，不佔版面高度——橫拍時每一個像素都很緊。
@@ -848,7 +853,20 @@ function renderItemBtns(){
 
 /* ═══════════ 相機 ═══════════ */
 var stream=null, facing="environment", camReady=false;
+/* 同時只能有一個 getUserMedia 在飛。
+   iOS 碰到兩個重疊會把它們一起中止，丟 AbortError: The operation was aborted.，
+   而且中止之後不會自己回來——畫面就停在那句英文上，快門停用，只能重新整理。
+   會叫到 startCam() 的地方有六個（visibilitychange、pageshow、track 的 ended、
+   鏡頭切換失敗退回、pickZoom、前後鏡頭切換），而 wakeCam() 只看 camReady，
+   getUserMedia 還在飛的時候它正好是 false，疊起來非常容易。 */
+var camBusy=false,     // 這一輪還沒收尾
+    camAgain=false,    // 收尾後要不要再啟動一次（擋掉的那些呼叫補在這裡）
+    camGen=0,          // 每次停掉就往前推，用來認出「已經沒人要的」那條串流
+    abortTries=0;      // AbortError 自動重試次數
 function stopCam(){
+  // 往前推一格：已經在飛的那次 getUserMedia 之後才拿到串流的話，
+  // 要認得出自己已經沒人要了，把串流關掉——否則相機指示燈會一直亮著。
+  camGen++;
   if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; }
   // 關掉相機就一定要把狀態降下來。少了這兩行，畫面已經凍住、快門卻看起來還能按，
   // 按下去是對一條死掉的串流拍照。
@@ -1022,11 +1040,33 @@ function fillLensSel(sel,cur,auto,offText){
   add("off",offText);
 }
 
+/* 相機打不開時畫面要說人話，而且要有一個按得到的出路。
+   先前只印瀏覽器給的英文原文（實機拍到的是「The operation was aborted.」），
+   現場看了也不知道要做什麼，而且除了重新整理沒有別的辦法。 */
+function camFail(msg,hint){
+  var m=$("camMsg");
+  m.style.display="grid";
+  m.innerHTML="<div><b>"+esc(msg)+"</b>"+(hint?"<br>"+esc(hint):"")+
+              "<br><button class=\"cam-retry\" id=\"btnCamRetry\" type=\"button\">重試</button></div>";
+  m.dataset.retry="1";
+  $("btnCamRetry").addEventListener("click",function(e){
+    e.stopPropagation();          // 別讓「點畫面就拍照」也收到這一下
+    abortTries=0;                 // 使用者自己按的，重試次數重新算
+    m.dataset.retry=""; m.textContent="相機啟動中…";
+    startCam();
+  });
+}
 function startCam(){
+  // 擋掉重疊。被擋下來的那一次不會就這樣消失，收尾時會補啟動一次。
+  if(camBusy){ camAgain=true; return; }
+  camBusy=true; camAgain=false;
+  var done=function(){ camBusy=false; if(camAgain) startCam(); };
   camReady=false; $("shutter").disabled=true; stopCam();
+  var gen=camGen;                                  // stopCam() 已經把它推到最新
+  var stale=function(){ return gen!==camGen; };
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
     $("camMsg").textContent="這個瀏覽器不支援相機。請用 Chrome 或 Safari，且網址必須是 https。";
-    return;
+    done(); return;
   }
   // 指定了鏡頭就用 deviceId，否則交給 facingMode 決定前後
   var vc=lensId?{deviceId:{exact:lensId}}:{facingMode:facing};
@@ -1037,6 +1077,9 @@ function startCam(){
      況且拉近現在主要走望遠鏡頭（真光學），裁切只是沒有望遠時的備援。 */
   vc.width={ideal:2560}; vc.height={ideal:1920};
   navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(st){
+    // 這一輪在等待期間被停掉了（例如 track 的 ended、或使用者按了別顆鏡頭）。
+    // 不關掉的話這條沒人要的串流會一直佔著相機，指示燈也一直亮。
+    if(stale()){ st.getTracks().forEach(function(t){t.stop();}); throw {__stale:true}; }
     stream=st; var v=$("video"); v.srcObject=st;
     // 別的 App 搶走相機時不會觸發 visibilitychange，只有這裡收得到
     st.getTracks().forEach(function(t){
@@ -1044,7 +1087,8 @@ function startCam(){
     });
     return v.play();
   }).then(function(){
-    camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
+    camReady=true; $("shutter").disabled=false;
+    $("camMsg").style.display="none"; $("camMsg").dataset.retry="";
     readZoomCaps();
     // lensErr 不在這裡清掉：切換失敗會退回一般鏡頭再啟動一次，
     // 在這裡清等於把失敗原因抹掉，畫面又變回什麼都沒說。
@@ -1060,11 +1104,11 @@ function startCam(){
   }).then(function(){
     renderZoomBar();
     $("zoomNote").textContent="變焦方式："+zoomKind();
+    abortTries=0;            // 這一輪好了，重試次數歸零
+    done();
   }).catch(function(err){
+    if(err&&err.__stale){ done(); return; }   // 已經被取代，不是錯誤
     var m=err&&err.name?err.name:"";
-    var msg="相機打不開："+(err&&err.message?err.message:m);
-    if(m==="NotAllowedError") msg="相機權限被拒。請在網址列的鎖頭圖示允許「相機」後重新整理。";
-    if(m==="NotFoundError") msg="找不到相機裝置。";
     /* 指定的鏡頭開不起來（裝置清單變了、或這顆不給單獨使用）就退回一般鏡頭，
        不要讓整個相機停擺——不能拍照比沒有廣角嚴重得多。
        但一定要留下原因：先前這裡是靜默退回，使用者按 0.5× 只看到「沒反應」，
@@ -1072,9 +1116,32 @@ function startCam(){
     if(lensId){
       var who=camById(lensId);
       lensErr=(who?trimLabel(who.label):"指定的鏡頭")+"：開不起來（"+(m||"未知錯誤")+"）";
-      lensId=null; uiZoom=1; startCam(); return;
+      lensId=null; uiZoom=1; camBusy=false; startCam(); return;
     }
-    $("camMsg").style.display="grid"; $("camMsg").textContent=msg;
+    /* AbortError 幾乎都是暫時的：兩個 getUserMedia 重疊、螢幕錄影開始或結束、
+       其他 App 剛放開相機。上面的擋重疊已經去掉自己造成的那一半，
+       剩下外部原因就自己再試，不要一次失敗就把整個畫面判死。 */
+    if((m==="AbortError"||m==="NotReadableError")&&abortTries<2){
+      abortTries++;
+      $("camMsg").style.display="grid";
+      $("camMsg").textContent="相機被中止，正在重試…（第 "+abortTries+" 次）";
+      camBusy=false;
+      var g=camGen;
+      // 等待期間若有別人把相機開起來了就別多此一舉再重開一次
+      setTimeout(function(){ if(camGen===g&&!camReady) startCam(); },600*abortTries);
+      return;
+    }
+    if(m==="NotAllowedError")
+      camFail("相機權限被拒","請在瀏覽器設定允許這個網站使用相機，再點下面重試。");
+    else if(m==="NotFoundError")
+      camFail("找不到相機","這台裝置沒有可用的相機。");
+    else if(m==="AbortError"||m==="NotReadableError")
+      camFail("相機被別的程式佔住了",
+              "正在錄影、或另一個 App／分頁也在用相機時最常發生。"+
+              "先停掉螢幕錄影、關掉其他相機 App 和分頁，再點下面重試。");
+    else
+      camFail("相機打不開","瀏覽器回報："+(err&&err.message?err.message:(m||"未知錯誤")));
+    done();
   });
 }
 
@@ -2294,7 +2361,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-29c";
+var APP_VERSION="2026-09-29d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
