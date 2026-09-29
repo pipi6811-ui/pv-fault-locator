@@ -995,8 +995,12 @@ function startCam(){
   }
   // 指定了鏡頭就用 deviceId，否則交給 facingMode 決定前後
   var vc=lensId?{deviceId:{exact:lensId}}:{facingMode:facing};
-  // 要得比實際存檔的 1920 高：數位變焦是裁中央，來源不夠大就只能糊掉
-  vc.width={ideal:3840}; vc.height={ideal:2880};
+  /* 比存檔的 1920 高一些，數位變焦裁中央時才還有像素可用。
+     曾經要到 3840，但實測 drawImage 從 4K 影片抓一張要 160ms，1920 只要 44ms，
+     整個拍照流程慢了一倍以上，連拍會明顯頓。2560 的總耗時和 1920 一樣（差距
+     在雜訊內），裁切餘裕卻比 1920 多——2× 裁完仍有 1280，而 1920 只剩 960。
+     況且拉近現在主要走望遠鏡頭（真光學），裁切只是沒有望遠時的備援。 */
+  vc.width={ideal:2560}; vc.height={ideal:1920};
   navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(st){
     stream=st; var v=$("video"); v.srcObject=st; return v.play();
   }).then(function(){
@@ -2198,7 +2202,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-23h";
+var APP_VERSION="2026-09-29a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
