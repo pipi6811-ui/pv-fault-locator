@@ -831,7 +831,20 @@ function renderItemBtns(){
 
 /* ═══════════ 相機 ═══════════ */
 var stream=null, facing="environment", camReady=false;
-function stopCam(){ if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; } }
+function stopCam(){
+  if(stream){ stream.getTracks().forEach(function(t){t.stop();}); stream=null; }
+  // 關掉相機就一定要把狀態降下來。少了這兩行，畫面已經凍住、快門卻看起來還能按，
+  // 按下去是對一條死掉的串流拍照。
+  camReady=false;
+  if($("shutter")) $("shutter").disabled=true;
+}
+/* 離開 App（切到別的 App、鎖螢幕、來電）時系統會把相機串流收走，回到前景
+   不會自己復原。沒有這段的話，回來就是畫面凍住、快門按不動。 */
+function wakeCam(){
+  if(document.visibilityState==="visible"&&!camReady) startCam();
+}
+document.addEventListener("visibilitychange",wakeCam);
+window.addEventListener("pageshow",wakeCam);
 
 /* ── 變焦 ──
    兩種來源，能用硬體就用硬體：
@@ -1002,7 +1015,12 @@ function startCam(){
      況且拉近現在主要走望遠鏡頭（真光學），裁切只是沒有望遠時的備援。 */
   vc.width={ideal:2560}; vc.height={ideal:1920};
   navigator.mediaDevices.getUserMedia({video:vc,audio:false}).then(function(st){
-    stream=st; var v=$("video"); v.srcObject=st; return v.play();
+    stream=st; var v=$("video"); v.srcObject=st;
+    // 別的 App 搶走相機時不會觸發 visibilitychange，只有這裡收得到
+    st.getTracks().forEach(function(t){
+      t.addEventListener("ended",function(){ stopCam(); wakeCam(); });
+    });
+    return v.play();
   }).then(function(){
     camReady=true; $("shutter").disabled=false; $("camMsg").style.display="none";
     readZoomCaps();
@@ -1559,26 +1577,48 @@ var busy=false;
 function shoot(){
   if(!camReady||busy) return;
   busy=true; $("shutter").disabled=true;
-  var f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
 
-  var v=$("video"), cv=$("work");
-  var vw=v.videoWidth||1280, vh=v.videoHeight||960;
-  // 數位變焦：從畫面正中央裁一塊出來。裁的倍率必須和預覽的 CSS 放大一致，
-  // 否則所見不是所得——取景時對準的東西會跑掉。
-  var sw=vw/digZoom, sh=vh/digZoom;
-  var sx=(vw-sw)/2, sy=(vh-sh)/2;
-  var scale=Math.min(1,1920/Math.max(sw,sh));
-  cv.width=Math.round(sw*scale); cv.height=Math.round(sh*scale);
-  cv.getContext("2d").drawImage(v,sx,sy,sw,sh,0,0,cv.width,cv.height);
-  // 畫面已經凍結，這一刻才是「拍到了」。放在這裡而不是存檔成功之後，
-  // 是因為手感要跟按下去同步；存檔失敗另外有一組明顯不同的回饋。
-  // 也必須在 click 事件的同步流程裡，iOS 才肯解鎖音訊。
-  fb("shot");
+  var cv=$("work"), clean, pending;
+  /* 這一段是同步的。它若丟例外，下面的 promise 鏈根本不會建立，最後那個
+     把 busy 放掉的 .then() 也永遠不會跑——快門就此鎖死，只能重新整理才救得回來。
+     相機被系統收走之後對死掉的串流 drawImage 正是會走到這裡。 */
+  try{
+    var f=$("flash"); f.classList.remove("go"); void f.offsetWidth; f.classList.add("go");
 
-  // 浮水印還沒蓋上去，這時的畫面才適合留做訓練資料
-  var clean=to224(cv);
+    // 串流可能已經死了而沒觸發 ended（track.stop() 依規格就不發這個事件）。
+    // 拍照當下直接問它還活不活著，是唯一擋得住「拍出一張黑畫面」的地方。
+    var tr=videoTrack();
+    if(!tr||tr.readyState!=="live") throw new Error("相機已中斷");
 
-  classify(cv).then(function(hit){
+    var v=$("video");
+    var vw=v.videoWidth||1280, vh=v.videoHeight||960;
+    // 數位變焦：從畫面正中央裁一塊出來。裁的倍率必須和預覽的 CSS 放大一致，
+    // 否則所見不是所得——取景時對準的東西會跑掉。
+    var z=(digZoom>0&&isFinite(digZoom))?digZoom:1;
+    var sw=vw/z, sh=vh/z;
+    var sx=(vw-sw)/2, sy=(vh-sh)/2;
+    var scale=Math.min(1,1920/Math.max(sw,sh));
+    cv.width=Math.round(sw*scale); cv.height=Math.round(sh*scale);
+    if(!cv.width||!cv.height) throw new Error("相機畫面還沒準備好");
+    cv.getContext("2d").drawImage(v,sx,sy,sw,sh,0,0,cv.width,cv.height);
+    // 畫面已經凍結，這一刻才是「拍到了」。放在這裡而不是存檔成功之後，
+    // 是因為手感要跟按下去同步；存檔失敗另外有一組明顯不同的回饋。
+    // 也必須在 click 事件的同步流程裡，iOS 才肯解鎖音訊。
+    fb("shot");
+
+    // 浮水印還沒蓋上去，這時的畫面才適合留做訓練資料
+    clean=to224(cv);
+    pending=classify(cv);
+  }catch(err){
+    busy=false; $("shutter").disabled=!camReady;
+    fb("err");
+    // 多半是相機被系統收走了，重開一次比叫使用者自己重新整理實際
+    stopCam(); wakeCam();
+    alert("拍照失敗："+errText(err)+"\n\n相機正在重新啟動，請稍候再按一次。");
+    return;
+  }
+
+  Promise.resolve(pending).then(function(hit){
     var overrode=false;
     var asShown=hit?displayOf(hit.label):null;
     if(hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
@@ -2479,7 +2519,7 @@ window.__pv={
   stamp:stamp, get photos(){return photos;}, get set(){return S;},
   get nas(){return NAS;}, get cur(){return curItem;}, get sel(){return selected;},
   setCur:function(v){ curItem=v; renderNow(); renderItemBtns(); },
-  _shoot:shoot, _refresh:refreshPhotos, _fileName:fileNameOf, _synoErr:synoErr
+  _shoot:shoot, _stopCam:stopCam, _wakeCam:wakeCam, get camReady(){return camReady;}, get busy(){return busy;}, _refresh:refreshPhotos, _fileName:fileNameOf, _synoErr:synoErr
 };
 })();
 </script>
