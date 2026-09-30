@@ -429,7 +429,19 @@
     <section>
       <div class="sec-head"><span class="num">5</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
       <div class="sec-body">
+        <div class="field">
+          <label class="chk"><input id="sAi" type="checkbox"><span>拍照時自動辨識並跳項目</span></label>
+        </div>
         <p class="hint" style="margin-top:0">
+          辨識有把握時會<b>直接改掉這張照片的檢查項目</b>——浮水印文字和 NAS 子資料夾
+          都跟著走，所以猜錯不只是看起來怪，是照片歸錯地方。
+          不想讓它插手就關掉，項目完全由你自己點，快門也會少等一段。
+          <b>關掉之後訓練樣本照收</b>，之後訓練完再打開就好，不用重頭累積。
+        </p>
+        <div class="note warn hidden" id="aiOffNote">
+          <b>自動辨識已關閉。</b>拍照不會辨識，項目完全由你手動點；訓練樣本仍照常收集。
+        </div>
+        <p class="hint">
           你每拍一張，App 就把畫面特徵和你當下選的項目記下來當教材。
           收夠了按「開始訓練」，之後拍照就會自動跳到對的項目。
           <b>訓練在手機上做，上傳時只送特徵數值，照片不會外傳。</b>
@@ -505,7 +517,9 @@
           <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
           <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 5 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
           <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
-          <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>。
+          <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>；
+          完全不想讓它插手，就把第 5 區最上面的<b>自動辨識關掉</b>——樣本照收，
+          之後隨時可以再打開。
         </div>
         <div class="note warn">
           <b>兩件事會讓它學歪：</b><br>
@@ -703,6 +717,7 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   who:"",            // 人員名稱，用來標記訓練樣本是誰貢獻的
   exclude:[],        // 訓練時要排除哪些人的樣本
   vib:true, snd:true, flash:true,   // 拍照回饋：震動、快門聲、畫面閃一下
+  ai:true,              // 拍照時自動辨識並跳項目
   remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
   tapShoot:true,        // 點取景畫面就拍照
   wideCam:"",           // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
@@ -1195,6 +1210,16 @@ var model=null;
 function setNote(el,html,cls){
   el.className="note"+(cls?" "+cls:""); el.innerHTML=html; el.classList.remove("hidden");
 }
+/* ── AI 自動選項目的總開關 ──
+   辨識命中時會直接改掉 curItem，而 curItem 決定浮水印文字和 NAS 子資料夾，
+   所以猜錯的代價不是「顯示怪怪的」，是照片蓋錯項目、歸錯資料夾。
+   關掉就整段不跑——不是算完不用，是根本不算。 */
+function aiOn(){ return S.ai!==false; }
+function aiChip(text){
+  var el=$("aiChip");
+  if(!aiOn()||!text){ el.classList.add("hidden"); return; }
+  el.classList.remove("hidden"); el.textContent=text;
+}
 function loadModel(url){
   url=(url||"").trim();
   if(!url){ setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）"); return Promise.resolve(false); }
@@ -1212,13 +1237,13 @@ function loadModel(url){
     if(!known.length){
       setNote($("modelState"),msg+"<br><b>注意：</b>模型類別和檢查項目對不起來，辨識結果無法自動套用。請把兩邊文字改成一致。","warn");
     }else setNote($("modelState"),msg,"ok");
-    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+    aiChip("AI 已就緒");
     return true;
   }).catch(function(err){
     model=null;
     setNote($("modelState"),"<b>狀態：</b>載入失敗 — "+errHtml(err)+
       "<br>確認網址是 Teachable Machine「Upload my model」給的那串，且此刻能連網。手動選項目不受影響。","bad");
-    $("aiChip").classList.add("hidden");
+    aiChip("");
     return false;
   });
 }
@@ -1311,6 +1336,8 @@ function loadKnn(){
 }
 
 function classify(cv){
+  // 開關關著就整段跳過。省下的是 MobileNet 那段特徵計算，快門會少等一次。
+  if(!aiOn()) return Promise.resolve(null);
   if(knn) return knnPredict(cv);
   if(!model) return Promise.resolve(null);
   return model.predict(cv).then(function(p){
@@ -1740,8 +1767,7 @@ function shoot(){
       fb("ai");
     }
     if(hit){
-      $("aiChip").classList.remove("hidden");
-      $("aiChip").textContent="AI："+(asShown||hit.label)+" "+Math.round(hit.prob*100)+"%";
+      aiChip("AI："+(asShown||hit.label)+" "+Math.round(hit.prob*100)+"%");
     }
     var when=new Date();
     stamp(cv,curItem,when);
@@ -2108,6 +2134,7 @@ function fillForms(){
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
   $("sTapShoot").checked=!!S.tapShoot; $("sFlash").checked=!!S.flash;
+  $("sAi").checked=aiOn(); renderAiState();
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
 }
@@ -2171,6 +2198,15 @@ $("sTapShoot").addEventListener("change",function(){
 $("sFlash").addEventListener("change",function(){
   S.flash=$("sFlash").checked; writeJSON(SET_KEY,S); if(S.flash) flashScreen("shot");
 });
+/* 開關切換要立刻反映在拍照頁的角標上，不然關掉之後角標還掛著「AI 已就緒」，
+   看起來像沒關成功。 */
+function renderAiState(){
+  $("aiOffNote").classList.toggle("hidden",aiOn());
+  aiChip(aiOn()&&(knn||model)?"AI 已就緒":"");
+}
+$("sAi").addEventListener("change",function(){
+  S.ai=$("sAi").checked; writeJSON(SET_KEY,S); renderAiState();
+});
 $("sSnd").addEventListener("change",function(){
   S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
 });
@@ -2197,7 +2233,7 @@ $("btnNasTest").addEventListener("click",function(){
 $("btnLoadModel").addEventListener("click",function(){ loadModel($("sModel").value); });
 $("btnUnloadModel").addEventListener("click",function(){
   model=null; S.model=""; writeJSON(SET_KEY,S); $("sModel").value="";
-  $("aiChip").classList.add("hidden");
+  aiChip("");
   setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
 });
 /* ── 邊拍邊學：設定頁 ── */
@@ -2281,7 +2317,7 @@ $("btnTrain").addEventListener("click",function(){
       if(ev.thin&&ev.thin.length)
         html+="<br><span style=\"font-size:12px\">樣本過少沒列入評估："+esc(ev.thin.join("、"))+"</span>";
       setNote($("trainState"),html,ev.skipped||ev.acc>=0.7?"ok":"warn");
-      $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+      aiChip("AI 已就緒");
       setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓","ok");
       return renderSampState();
     })
@@ -2305,7 +2341,7 @@ $("btnWipeSamples").addEventListener("click",function(){
   if(!confirm("清空全部訓練樣本？\n\n包含從 NAS 併入的同仁樣本。已經訓練好的辨識能力會一起失效。\n照片本身與 NAS 上的共用檔案不受影響（下次訓練會重新抓回來）。")) return;
   Promise.all([sampClear(),shClear(),kvDel("knn"),kvDel("knn_prev"),kvDel("merged")]).then(function(){
     knn=null; knnMeta=null;
-    $("aiChip").classList.add("hidden");
+    aiChip("");
     setNote($("trainState"),"<b>已清空。</b>再拍照就會重新開始累積。","ok");
     setNote($("modelState"),"<b>狀態：</b>未載入（手動選項目）");
     return renderSampState();
@@ -2361,7 +2397,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-29d";
+var APP_VERSION="2026-09-30a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2603,7 +2639,7 @@ startCam();
 // 手機上訓練過的模型優先；沒有才回頭用 Teachable Machine 網址
 loadKnn().then(function(has){
   if(has){
-    $("aiChip").classList.remove("hidden"); $("aiChip").textContent="AI 已就緒";
+    aiChip("AI 已就緒");
     setNote($("modelState"),"<b>狀態：</b>使用手機上訓練的模型 ✓"+
       (knnMeta&&knnMeta.acc!=null?"（實測辨識率 "+Math.round(knnMeta.acc*100)+"%）":""),"ok");
   }else if(S.model) loadModel(S.model);
@@ -2623,6 +2659,7 @@ window.__pv={
   _login:synoLogin, get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   _fb:fb, _canVib:canVib, _fbPattern:FB, _flash:flashScreen,
+  _aiOn:aiOn, _aiChip:aiChip, _renderAiState:renderAiState,
   _zoom:pickZoom, _zoomLevels:ZOOM_LEVELS, _zoomKind:zoomKind,
   _choices:zoomChoices, get cams(){ return cams.slice(); },
   get lensId(){ return lensId; }, _wideId:wideId, _autoWide:autoWideId,
