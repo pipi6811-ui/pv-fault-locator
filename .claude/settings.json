@@ -1,0 +1,9 @@
+{
+  "mcp": {
+    "servers": {
+      "tobid": {
+        "url": "https://api.tobid.tw/mcp"
+      }
+    }
+  }
+}
