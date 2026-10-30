@@ -1463,7 +1463,7 @@ function pushSamples(sid){
       if(!r.ok) throw new Error("HTTP "+r.status);
       return r.json();
     }).then(function(j){
-      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code,"fs"));
       // 標記已送出，下次不重複上傳
       return todo.reduce(function(c,s){
         return c.then(function(){ s.synced=true; return sampPut(s); });
@@ -1867,17 +1867,45 @@ function fileNameOf(p){
 }
 
 /* ═══════════ Synology 上傳 ═══════════ */
-var SYNO_ERR={
+/* 登入（SYNO.API.Auth）和檔案存取（SYNO.FileStation）是兩組獨立的 API，
+   錯誤碼各自編號，同一個數字意思完全不同。
+
+   先前兩邊共用一張表，於是 FileStation 回的 407 被套上登入表的說法
+   「IP 被 NAS 封鎖」。實機就這樣踩到：新帳號測試連線成功（帳密是對的），
+   上傳卻說 IP 被封鎖——人被指去 DSM 解除一個根本不存在的封鎖，
+   真正的問題是那個帳號對目的資料夾沒有權限。
+
+   登入和上傳走的是同一個 apiUrl()、同一個 proxy、同一個來源 IP，
+   所以「登入成功但上傳說 IP 被封鎖」本來就不可能成立。 */
+var COMMON_ERR={   // 每一組 API 都通用
   100:"未知錯誤",101:"參數不正確",102:"找不到 API，確認網址是不是 NAS 的 DSM 位址",
   103:"這個 API 方法不存在",105:"權限不足",106:"連線逾時",107:"連線被中斷",
+  119:"連線階段已失效，請再試一次"
+};
+var AUTH_ERR={     // 只有 auth.cgi 適用
   400:"帳號或密碼錯誤",401:"帳號已停用",402:"權限不足",
   403:"這個帳號開了二階段驗證，請填驗證碼",404:"二階段驗證碼錯誤或已過期",
-  406:"需要先設定 email",407:"IP 被 NAS 封鎖，請到 DSM 解除封鎖",408:"密碼已過期，請先到 DSM 改密碼",
-  119:"連線階段已失效，請再試一次",
+  406:"需要先設定 email",407:"IP 被 NAS 封鎖，請到 DSM 解除封鎖",408:"密碼已過期，請先到 DSM 改密碼"
+};
+var FS_ERR={       // 只有 FileStation 適用
   1001:"上傳的參數不正確",1002:"上傳時發生錯誤",1003:"上傳被取消",
   1805:"無法建立資料夾，確認路徑和寫入權限"
 };
-function synoErr(code){ return SYNO_ERR[code]||("錯誤碼 "+code); }
+/* scope 一定要傳。查不到的碼就老實說是哪一組的第幾號，
+   絕對不要拿另一組的說法硬套——寧可講「不知道」，也不要把人指到錯的地方。 */
+function synoErr(code,scope){
+  if(COMMON_ERR[code]) return COMMON_ERR[code];
+  var t=(scope==="auth")?AUTH_ERR:FS_ERR;
+  if(t[code]) return t[code];
+  if(scope==="auth") return "登入錯誤碼 "+code;
+  // 純文字，不要在這裡轉義：errHtml() 渲染時會 esc 一次，
+  // 而 alert() 那條路徑要的本來就是純文字
+  return "檔案存取錯誤碼 "+code+
+    ((code>=400&&code<=599)
+      ? "（帳密是對的，卡在檔案權限。請確認這個帳號在 DSM 的「應用程式權限」有開 File Station，"+
+        "且對 "+NAS_ROOT+" 有讀寫權限）"
+      : "");
+}
 
 /* ── 上傳目的地：固定值，使用者不可更改 ──
    要換 NAS 位址或根目錄時改這兩行，其餘程式不必動。
@@ -1966,7 +1994,7 @@ function synoLogin(){
       return r.json();
     })
     .then(function(j){
-      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code,"auth"));
       return j.data.sid;
     })
     .catch(function(err){
@@ -1991,7 +2019,7 @@ function synoUpload(sid,p){
       return r.json();
     })
     .then(function(j){
-      if(!j.success) throw new Error(synoErr(j.error&&j.error.code));
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code,"fs"));
       return true;
     });
 }
@@ -2397,7 +2425,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-09-30a";
+var APP_VERSION="2026-10-29a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
