@@ -2170,8 +2170,9 @@ function diagramFor(area){
 var PANELS={};
 /* 校正的起始範本。只有在這個案場還沒校正過、而且使用者主動按下「校正模組
    網格」時才拿出來用——它不會自動生效。
-   行列數與各串片數是跟現場核對過的；四個角只是粗估，一定要自己拖到對齊。
-   做成範本而不是直接內建，是因為沒對齊的網格會算出錯的片號，
+   行列數與各串片數是跟圖面核對過的；四個角只是粗估，一定要自己拖到對齊，
+   各串的先後順序也要照現場的接線確認一次。
+   做成範本而不是直接內建，是因為沒對齊的網格、排錯的串序都會算出錯的片號，
    而片號錯了整套破片管理的資料都是錯的。 */
 var SEEDS={
   "三民國小":{blocks:[
@@ -2188,6 +2189,54 @@ var SEEDS={
      strings:[{name:"PV 1-10後半",n:8},{name:"PV 2-1",n:16},{name:"PV 2-2",n:16},
               {name:"PV 2-3",n:16},{name:"PV 2-4",n:16},{name:"PV 2-5",n:16},
               {name:"PV 2-6",n:16}]}
+  ]},
+  /* 三民國小-風雨球場：1032 片，六個區 A～F。
+     行列數是從串併圖上量的（模組一格 36.3 × 73.7 px，六個區量出來都一樣），
+     而且每一區的格數剛好等於規格表推出的片數，六區合計 1032 ——
+     幾何這部分有交叉驗證過。
+
+     串名沿用圖上的 DC 盤迴路編號，片數來自規格表（各串併列數 ÷ 410W 對得起來）。
+     但「哪一串排在哪幾格」是我從圖上讀的，不是量出來的：
+       · A、B：圖上看得到兩欄一串的縱向迴路，上半 9 列、下半 7 列，有把握
+       · C～F：接線方向圖上混雜（E 上面三列是橫向走線），順序要自己對過
+     所以四個角要拖準，各串順序也要確認——順序錯了片號會安靜地錯。 */
+  "三民國小-風雨球場":{blocks:[
+    {id:"A上",rows:9,cols:10,major:"col",snake:true,
+     quad:[[0.4484,0.2515],[0.5260,0.2512],[0.5260,0.4517],[0.4484,0.4520]],
+     strings:[{name:"DC 2-1",n:18},{name:"DC 2-2",n:18},{name:"DC 2-3",n:18},
+              {name:"DC 2-4",n:18},{name:"DC 9-3",n:18}]},
+    {id:"A下",rows:7,cols:10,major:"row",snake:false,
+     quad:[[0.4484,0.4520],[0.5260,0.4517],[0.5260,0.6076],[0.4484,0.6079]],
+     strings:[{name:"DC 9-1",n:19},{name:"DC 9-2",n:19},{name:"DC 1-3",n:32}]},
+    {id:"B上",rows:9,cols:8,major:"col",snake:true,
+     quad:[[0.5279,0.2512],[0.5901,0.2506],[0.5901,0.4511],[0.5279,0.4517]],
+     strings:[{name:"DC 3-1",n:18},{name:"DC 3-2",n:18},
+              {name:"DC 3-3",n:18},{name:"DC 3-4",n:18}]},
+    {id:"B下",rows:7,cols:8,major:"col",snake:true,
+     quad:[[0.5279,0.4517],[0.5901,0.4511],[0.5901,0.6070],[0.5279,0.6076]],
+     strings:[{name:"DC 1-1",n:28},{name:"DC 1-2",n:28}]},
+    {id:"C",rows:16,cols:9,major:"row",snake:false,
+     quad:[[0.5916,0.2506],[0.6615,0.2497],[0.6615,0.6061],[0.5916,0.6067]],
+     strings:[{name:"DC 5-1",n:18},{name:"DC 5-2",n:18},{name:"DC 5-3",n:18},
+              {name:"DC 5-4",n:18},{name:"DC 5-5",n:18},{name:"DC 5-6",n:18},
+              {name:"DC 1-8",n:36}]},
+    {id:"D",rows:16,cols:9,major:"row",snake:false,
+     quad:[[0.6635,0.2497],[0.7338,0.2491],[0.7338,0.6058],[0.6635,0.6064]],
+     strings:[{name:"DC 4-1",n:19},{name:"DC 4-2",n:19},{name:"DC 4-3",n:18},
+              {name:"DC 4-4",n:18},{name:"DC 8-1",n:19},{name:"DC 8-2",n:19},
+              {name:"DC 1-4",n:32}]},
+    {id:"E",rows:19,cols:11,major:"row",snake:false,
+     quad:[[0.7357,0.1826],[0.8210,0.1820],[0.8210,0.6052],[0.7357,0.6058]],
+     strings:[{name:"DC 5-10",n:18},{name:"DC 5-9",n:18},{name:"DC 5-11",n:18},
+              {name:"DC 5-7",n:19},{name:"DC 5-8",n:19},{name:"DC 7-1",n:17},
+              {name:"DC 7-2",n:17},{name:"DC 7-3",n:17},{name:"DC 7-4",n:17},
+              {name:"DC 8-3",n:17},{name:"DC 1-5",n:32}]},
+    {id:"F",rows:19,cols:13,major:"row",snake:false,
+     quad:[[0.8234,0.1820],[0.9237,0.1811],[0.9237,0.6043],[0.8234,0.6052]],
+     strings:[{name:"DC 6-1",n:20},{name:"DC 6-2",n:20},{name:"DC 6-3",n:20},
+              {name:"DC 6-4",n:20},{name:"DC 6-5",n:20},{name:"DC 6-6",n:20},
+              {name:"DC 6-7",n:20},{name:"DC 6-8",n:20},{name:"DC 6-9",n:21},
+              {name:"DC 1-6",n:32},{name:"DC 1-7",n:34}]}
   ]}
 };
 /* 串併圖放在 NAS，App 抓下來存在手機裡。
@@ -2789,6 +2838,9 @@ function closeEditor(save){
     saveGrids();
   }
   edit=false;
+  /* 把手一定要收掉。它是 40×40 的 div，疊在格子上面；留著的話
+     下次開圖選片時，點到區塊四個角那幾片會被把手吃掉，什麼都沒反應。 */
+  edHandles();
   $("dgmEdit").classList.add("hidden");
   $("btnDgmOk").classList.remove("hidden");
   $("btnDgmSave").classList.add("hidden");
@@ -3429,7 +3481,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18h";
+var APP_VERSION="2026-11-18i";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
