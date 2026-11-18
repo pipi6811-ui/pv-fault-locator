@@ -783,6 +783,7 @@
   </div>
   <div class="dgm-bar">
     <button class="no" id="btnDgmCancel" type="button">取消</button>
+    <button class="no hidden" id="btnDgmCalib" type="button">去校正</button>
     <button class="ok" id="btnDgmOk" type="button" disabled>確定位置</button>
     <button class="ok hidden" id="btnDgmSave" type="button">存起來</button>
   </div>
@@ -2135,6 +2136,37 @@ function diagramFor(area){
 
    資料與程式分開：之後補上校正介面時，改的是這份資料，不必動程式。 */
 var PANELS={};
+/* 校正的起始範本。只有在這個案場還沒校正過、而且使用者主動按下「校正模組
+   網格」時才拿出來用——它不會自動生效。
+   行列數與各串片數是跟現場核對過的；四個角只是粗估，一定要自己拖到對齊。
+   做成範本而不是直接內建，是因為沒對齊的網格會算出錯的片號，
+   而片號錯了整套破片管理的資料都是錯的。 */
+var SEEDS={
+  "三民國小":{blocks:[
+    {id:"A",rows:15,cols:7,major:"row",snake:true,
+     quad:[[0.175,0.099],[0.389,0.137],[0.327,0.382],[0.113,0.342]],
+     strings:[{name:"PV 1-1",n:21},{name:"PV 1-2",n:21},{name:"PV 1-3",n:21},
+              {name:"PV 1-4",n:21},{name:"PV 1-5",n:21}]},
+    {id:"B",rows:4,cols:21,major:"col",snake:true,
+     quad:[[0.236,0.601],[0.540,0.601],[0.540,0.748],[0.236,0.748]],
+     strings:[{name:"PV 1-6",n:20},{name:"PV 1-7",n:18},{name:"PV 1-8",n:20},
+              {name:"PV 1-9",n:18},{name:"PV 1-10前半",n:8}]},
+    {id:"C",rows:8,cols:13,major:"col",snake:true,
+     quad:[[0.588,0.611],[0.966,0.668],[0.958,0.780],[0.580,0.723]],
+     strings:[{name:"PV 1-10後半",n:8},{name:"PV 2-1",n:16},{name:"PV 2-2",n:16},
+              {name:"PV 2-3",n:16},{name:"PV 2-4",n:16},{name:"PV 2-5",n:16},
+              {name:"PV 2-6",n:16}]}
+  ]}
+};
+function seedFor(area){
+  if(SEEDS[area]) return SEEDS[area];
+  var a=dgmKey(area), ks=Object.keys(SEEDS);
+  for(var i=0;i<ks.length;i++){
+    var k=dgmKey(ks[i]);
+    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return SEEDS[ks[i]];
+  }
+  return null;
+}
 function gridFor(area){
   // 現場自己校正過的優先，其次才是程式內建的
   var mine=gridSaved[gridKey(area)];
@@ -2365,9 +2397,13 @@ function openDiagram(){
   if(!src) return;
   closeAsk();
   dgmMark=null; pick=null; $("btnDgmOk").disabled=true;
-  $("brkDgmTip").innerHTML=gridFor(S.area)
+  var hasGrid=!!gridFor(S.area);
+  $("brkDgmTip").innerHTML=hasGrid
     ? "點破片的那一片模組。<b>兩指可以放大</b>，點錯再點一次就好。"
-    : "用手指點破片的位置。<b>兩指可以放大</b>，點錯再點一次就好。";
+    : "<b>這個案場還沒校正模組網格</b>，所以只能點大概位置（不會有紅框）。"+
+      "要點到特定那一片，按下面的「去校正」。";
+  // 沒校正過的話，直接給一條路過去，不要讓人卡在這裡猜
+  $("btnDgmCalib").classList.toggle("hidden",hasGrid);
   $("brkDgm").classList.add("on");
   $("brkDgmImg").src=src;
   var im=new Image();
@@ -2625,7 +2661,13 @@ function openEditor(){
     return;
   }
   edit=true; edIdx=0;
-  if(!edBlocks().length) edBlocks().push(edNewBlock());
+  if(!edBlocks().length){
+    var seed=seedFor(S.area);
+    if(seed){
+      // 深拷貝：範本是共用的，不能讓編輯動到它
+      gridSaved[gridKey(S.area)].blocks=JSON.parse(JSON.stringify(seed.blocks));
+    }else edBlocks().push(edNewBlock());
+  }
   openDiagram();
   $("dgmEdit").classList.remove("hidden");
   $("btnDgmOk").classList.add("hidden");
@@ -2667,6 +2709,7 @@ $("edDel").addEventListener("click",function(){
   edSyncForm(); renderPanelGrid(); edHandles();
 });
 $("btnDgmSave").addEventListener("click",function(){ closeEditor(true); });
+$("btnDgmCalib").addEventListener("click",function(){ closeDiagram(); openEditor(); });
 $("btnEditGrid").addEventListener("click",openEditor);
 
 $("btnBrkYes").addEventListener("click",openDiagram);
@@ -3064,7 +3107,10 @@ function renderDgmState(){
       ss+=(b.strings||[]).reduce(function(a,x){return a+x.n;},0); });
     body+="<br><b>模組網格：</b>"+g.blocks.length+" 個區塊、共 "+tot+" 片"+
       (ss?("，已分串 "+ss+" 片"):"，還沒填各串片數");
-  }else body+="<br><b>模組網格：</b>還沒校正——破片定位目前是點座標，不是點到那一片。";
+  }else body+="<br><b>模組網格：</b>還沒校正——所以破片定位目前是<b>點大概位置</b>，"+
+      "點下去不會有紅框，資料也不會記片號。"+
+      (seedFor(S.area)?"按下面「校正模組網格」會先帶出這個案場的行列數與各串，"+
+        "你只要把四個角拖到對齊就好。":"");
   setNote($("dgmState"),body,mine?"ok":"warn");
 }
 $("sSnd").addEventListener("change",function(){
@@ -3260,7 +3306,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18e";
+var APP_VERSION="2026-11-18f";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3523,7 +3569,7 @@ window.__pv={
   _login:synoLogin,
   _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
-  _camResume:camResume, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
+  _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
   _edBlocks:edBlocks, _edApply:edApplyForm, _parseStrings:parseStrings,
   get _edit(){ return edit; }, _loadGrids:loadGrids,
   get _grids(){ return JSON.parse(JSON.stringify(gridSaved)); },
