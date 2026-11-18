@@ -136,6 +136,20 @@
   .dgm-grid .cell{fill:rgba(0,0,0,0);stroke:rgba(0,90,200,.25);stroke-width:1;
     cursor:pointer;}
   .dgm-grid .cell.on{fill:rgba(214,59,47,.45);stroke:#d63b2f;stroke-width:3;}
+  /* ── 校正模式 ── */
+  .dgm-h{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;
+    border-radius:50%;background:rgba(0,120,255,.3);border:3px solid #0a64c8;
+    cursor:grab;touch-action:none;}
+  .dgm-h b{position:absolute;inset:12px;border-radius:50%;background:#0a64c8;}
+  .dgm-edit{background:#1a1a1a;color:#fff;padding:10px;max-height:46vh;overflow:auto;}
+  .dgm-edit .row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .dgm-edit label{font-size:12px;font-weight:700;white-space:nowrap;}
+  .dgm-edit input,.dgm-edit select{flex:1;min-width:0;padding:9px;font-size:15px;
+    border:2px solid #555;border-radius:8px;background:#fff;color:var(--ink);
+    font-family:var(--sans);}
+  .dgm-edit input.num{max-width:76px;flex:0 0 auto;text-align:center;}
+  .dgm-edit .hint2{font-size:11.5px;color:#bbb;line-height:1.5;margin:0 0 8px;}
+  .dgm-edit .warn2{color:var(--hazard);font-weight:700;}
   .dgm-mark{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;
     pointer-events:none;display:none;}
   .dgm-mark.on{display:block;}
@@ -687,6 +701,14 @@
           之後做破片管理系統時直接讀資料夾就有結構化資料。
         </p>
         <div class="note" id="dgmState"></div>
+        <div class="btnrow">
+          <button class="b2" id="btnEditGrid" type="button">校正模組網格</button>
+        </div>
+        <p class="hint">
+          校正過之後，破片定位就不是點一個座標，而是<b>點到那一片</b>，
+          資料會記下是哪一串的第幾片。<b>蛇行方向每個案場不一樣</b>，
+          所以這件事要現場的人照實際配線設定，設定只存在這支手機裡。
+        </p>
         <div class="note warn">
           <b>串併圖是跟著程式走的</b>，不是從 NAS 抓 ——
           屋頂上沒訊號也打得開，因為定位正好是現場當下要做的事。
@@ -726,9 +748,42 @@
       <div class="dgm-mark" id="brkDgmMark"><i></i><b></b><b></b><b></b><b></b></div>
     </div>
   </div>
+  <div class="dgm-edit hidden" id="dgmEdit">
+    <div class="row">
+      <label>區塊</label>
+      <select id="edBlock"></select>
+      <button class="b2 b-sm" id="edAdd" type="button">新增</button>
+      <button class="b2 b-sm b-danger" id="edDel" type="button">刪除</button>
+    </div>
+    <p class="hint2">
+      拖動圖上四個藍點圈出這一塊的範圍，再填切成幾列幾行。
+      右邊的預覽會即時跟著變，對齊了再存。
+    </p>
+    <div class="row">
+      <label>列(橫)</label><input class="num" id="edRows" type="number" min="1" max="60">
+      <label>行(直)</label><input class="num" id="edCols" type="number" min="1" max="60">
+      <span id="edTotal" style="font-size:12px"></span>
+    </div>
+    <div class="row">
+      <label>編號順序</label>
+      <select id="edMajor">
+        <option value="row">先走橫的（一列一列）</option>
+        <option value="col">先走直的（一行一行）</option>
+      </select>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="edSnake"> 每排折返（蛇行）</label>
+    </div>
+    <div class="row">
+      <label>各串</label>
+      <input id="edStrings" type="text" placeholder="PV 1-1:21, PV 1-2:21">
+    </div>
+    <p class="hint2" id="edSum"></p>
+  </div>
   <div class="dgm-bar">
     <button class="no" id="btnDgmCancel" type="button">取消</button>
     <button class="ok" id="btnDgmOk" type="button" disabled>確定位置</button>
+    <button class="ok hidden" id="btnDgmSave" type="button">存起來</button>
   </div>
 </div>
 
@@ -2064,6 +2119,9 @@ function diagramFor(area){
    資料與程式分開：之後補上校正介面時，改的是這份資料，不必動程式。 */
 var PANELS={};
 function gridFor(area){
+  // 現場自己校正過的優先，其次才是程式內建的
+  var mine=gridSaved[gridKey(area)];
+  if(mine&&mine.blocks&&mine.blocks.length) return mine;
   if(PANELS[area]) return PANELS[area];
   var a=dgmKey(area), ks=Object.keys(PANELS);
   for(var i=0;i<ks.length;i++){
@@ -2113,8 +2171,19 @@ function cellIds(b){
   return {order:ord,map:map};
 }
 
+/* 案場自己校正出來的網格存在手機裡，優先於程式內建的 PANELS。
+   蛇行方向每個案場不一樣、要看現場，所以這件事本來就只能現場的人設定，
+   不該靠改程式。 */
+var gridSaved={};
+function gridKey(a){ return "grid:"+dgmKey(a); }
+function loadGrids(){
+  return kvGet("grids").then(function(v){ gridSaved=v||{}; }).catch(function(){});
+}
+function saveGrids(){ return kvSet("grids",gridSaved); }
+
 var brk=null;              // 進行中的破片；null＝沒有在跑定位流程
 var pick=null;             // 選到的那一片：{block,row,col,str,no,cx,cy}
+var edit=false, edIdx=0;   // 校正模式
 var BRK_STEPS=[
   {key:"外觀", title:"第 1 張：破片外觀", sub:"拍整片模組，看得出破在哪裡。"},
   {key:"序號", title:"第 2 張：模組序號", sub:"對準銘牌，序號要看得清楚。"}
@@ -2175,6 +2244,9 @@ function dgmDraw(){
     m.style.top =(dgmMark.y*dgmImg.naturalHeight)+"px";
     m.style.transform="scale("+(1/dgmK)+")";
   }else m.classList.remove("on");
+  if(edit) Array.prototype.forEach.call(
+    $("brkDgmLayer").querySelectorAll(".dgm-h"),
+    function(h){ h.style.transform="scale("+(1/dgmK)+")"; });
 }
 // 紅色標記。半徑跟著圖的尺寸走，大圖小圖都看得見。
 // 存檔的定位圖要看得出是「哪一片」，不只是一個點
@@ -2279,7 +2351,8 @@ function openDiagram(){
   $("brkDgm").classList.add("on");
   $("brkDgmImg").src=src;
   var im=new Image();
-  im.onload=function(){ dgmImg=im; dgmFit(); renderPanelGrid(); };
+  im.onload=function(){ dgmImg=im; dgmFit(); renderPanelGrid();
+    if(edit){ edSyncForm(); edHandles(); } };
   im.onerror=function(){
     closeDiagram();
     alert("串併圖讀不出來，這次先用一般方式拍照。");
@@ -2331,6 +2404,7 @@ function dgmXY(e){
     dgmDownXY=null;
     /* 有網格的案場就一定要點到某一片。用瀏覽器的命中判定去問那個點底下
        是哪個多邊形——四邊形再歪斜也不會算錯，也省掉反解雙線性插值。 */
+    if(edit) return;                           // 校正模式只拖角，不選片
     if(gridFor(S.area)){
       var hit=document.elementFromPoint(e.clientX,e.clientY);
       if(hit&&hit.classList&&hit.classList.contains("cell")) selectCell(hit);
@@ -2424,6 +2498,153 @@ function brkCancel(){
   if(!ids.length) return Promise.resolve();
   return dbDel(ids).then(refreshPhotos);
 }
+
+/* ── 校正模式 ──
+   拖四個角圈出一塊、填幾列幾行、寫各串片數，預覽即時跟著變。
+   做成現場自己來，是因為蛇行方向本來就因案場而異、要看現場才知道，
+   而四個角靠別人看掃描圖去猜一定對不準。 */
+function edBlocks(){
+  var k=gridKey(S.area);
+  if(!gridSaved[k]) gridSaved[k]={blocks:[]};
+  return gridSaved[k].blocks;
+}
+function edCur(){ return edBlocks()[edIdx]||null; }
+function edNewBlock(){
+  var n=edBlocks().length;
+  return {id:String.fromCharCode(65+n),rows:4,cols:6,major:"row",snake:true,
+          quad:[[0.3,0.3],[0.7,0.3],[0.7,0.6],[0.3,0.6]],strings:[]};
+}
+function parseStrings(t){
+  var out=[];
+  String(t||"").split(/[,，;；\n]/).forEach(function(part){
+    var m=/^\s*(.+?)\s*[:：]\s*(\d+)\s*$/.exec(part);
+    if(m) out.push({name:m[1],n:parseInt(m[2],10)});
+  });
+  return out;
+}
+function fmtStrings(a){
+  return (a||[]).map(function(s){ return s.name+":"+s.n; }).join(", ");
+}
+function edSyncForm(){
+  var b=edCur();
+  var sel=$("edBlock"); sel.innerHTML="";
+  edBlocks().forEach(function(k,i){
+    var o=document.createElement("option");
+    o.value=String(i); o.textContent="區塊 "+k.id;
+    if(i===edIdx) o.selected=true;
+    sel.appendChild(o);
+  });
+  if(!b) return;
+  $("edRows").value=b.rows; $("edCols").value=b.cols;
+  $("edMajor").value=b.major||"row"; $("edSnake").checked=b.snake!==false;
+  $("edStrings").value=fmtStrings(b.strings);
+  edSummary();
+}
+function edSummary(){
+  var b=edCur(); if(!b) return;
+  var cells=b.rows*b.cols;
+  var used=(b.strings||[]).reduce(function(a,s){ return a+s.n; },0);
+  $("edTotal").textContent="= "+cells+" 片";
+  var msg="各串合計 "+used+" 片";
+  if(used>cells) msg+="　<span class='warn2'>超過格數 "+cells+"，多的排不下</span>";
+  else if(used<cells) msg+="　（還有 "+(cells-used)+" 格沒分配，點到會只有行列沒有串名）";
+  else msg+="　剛好填滿 ✓";
+  $("edSum").innerHTML=msg;
+}
+function edApplyForm(){
+  var b=edCur(); if(!b) return;
+  b.rows=Math.max(1,Math.min(60,parseInt($("edRows").value,10)||1));
+  b.cols=Math.max(1,Math.min(60,parseInt($("edCols").value,10)||1));
+  b.major=$("edMajor").value;
+  b.snake=$("edSnake").checked;
+  b.strings=parseStrings($("edStrings").value);
+  /* 不要在這裡重建把手。把手只跟四邊形有關，跟行列數無關；
+     而這個函式會被輸入框的 change 觸發——在欄位打完字後去拖角，
+     失焦的 change 會在拖曳途中把那顆把手換掉，拖曳就整個沒了。 */
+  edSummary(); renderPanelGrid();
+}
+// 四個可拖的角
+function edHandles(){
+  var host=$("brkDgmLayer");
+  Array.prototype.forEach.call(host.querySelectorAll(".dgm-h"),
+    function(n){ n.remove(); });
+  var b=edCur(); if(!edit||!b||!dgmImg) return;
+  b.quad.forEach(function(pt,i){
+    var h=document.createElement("div");
+    h.className="dgm-h"; h.innerHTML="<b></b>";
+    h.style.left=(pt[0]*dgmImg.naturalWidth)+"px";
+    h.style.top =(pt[1]*dgmImg.naturalHeight)+"px";
+    h.style.transform="scale("+(1/dgmK)+")";
+    h.addEventListener("pointerdown",function(e){
+      e.stopPropagation(); h.setPointerCapture(e.pointerId);
+      var move=function(ev){
+        var r=$("brkDgmWrap").getBoundingClientRect();
+        var x=(ev.clientX-r.left-dgmTx)/dgmK/dgmImg.naturalWidth;
+        var y=(ev.clientY-r.top -dgmTy)/dgmK/dgmImg.naturalHeight;
+        b.quad[i]=[Math.max(0,Math.min(1,x)),Math.max(0,Math.min(1,y))];
+        h.style.left=(b.quad[i][0]*dgmImg.naturalWidth)+"px";
+        h.style.top =(b.quad[i][1]*dgmImg.naturalHeight)+"px";
+        renderPanelGrid();
+      };
+      var up=function(){
+        h.removeEventListener("pointermove",move);
+        h.removeEventListener("pointerup",up);
+      };
+      h.addEventListener("pointermove",move);
+      h.addEventListener("pointerup",up);
+    });
+    host.appendChild(h);
+  });
+}
+function openEditor(){
+  if(!diagramFor(S.area)){
+    alert("這個案場還沒有串併圖，沒辦法校正網格。");
+    return;
+  }
+  edit=true; edIdx=0;
+  if(!edBlocks().length) edBlocks().push(edNewBlock());
+  openDiagram();
+  $("dgmEdit").classList.remove("hidden");
+  $("btnDgmOk").classList.add("hidden");
+  $("btnDgmSave").classList.remove("hidden");
+  $("brkDgmTip").innerHTML="<b>校正模式</b>　拖藍點圈出一塊，下面填幾列幾行。";
+}
+function closeEditor(save){
+  if(save){
+    edApplyForm();
+    // 沒圈範圍也沒填串的空區塊不要留著
+    var ks=gridKey(S.area);
+    gridSaved[ks].blocks=edBlocks().filter(function(b){ return b.rows&&b.cols; });
+    saveGrids();
+  }
+  edit=false;
+  $("dgmEdit").classList.add("hidden");
+  $("btnDgmOk").classList.remove("hidden");
+  $("btnDgmSave").classList.add("hidden");
+  closeDiagram();
+  renderDgmState();
+}
+["edRows","edCols","edMajor","edSnake","edStrings"].forEach(function(id){
+  $(id).addEventListener("change",edApplyForm);
+  $(id).addEventListener("input",edApplyForm);
+});
+$("edBlock").addEventListener("change",function(){
+  edApplyForm(); edIdx=parseInt($("edBlock").value,10)||0;
+  edSyncForm(); renderPanelGrid(); edHandles();
+});
+$("edAdd").addEventListener("click",function(){
+  edApplyForm(); edBlocks().push(edNewBlock()); edIdx=edBlocks().length-1;
+  edSyncForm(); renderPanelGrid(); edHandles();
+});
+$("edDel").addEventListener("click",function(){
+  if(!edBlocks().length) return;
+  if(!confirm("刪掉區塊 "+edCur().id+"？")) return;
+  edBlocks().splice(edIdx,1); edIdx=0;
+  if(!edBlocks().length) edBlocks().push(edNewBlock());
+  edSyncForm(); renderPanelGrid(); edHandles();
+});
+$("btnDgmSave").addEventListener("click",function(){ closeEditor(true); });
+$("btnEditGrid").addEventListener("click",openEditor);
 
 $("btnBrkYes").addEventListener("click",openDiagram);
 $("btnBrkNo").addEventListener("click",closeAsk);
@@ -2813,6 +3034,14 @@ function renderDgmState(){
   var body="<b>目前案場：</b>"+esc(S.area||"未設定")+
     (mine?" —— 有串併圖 ✓":" —— <b>沒有串併圖，無法定位</b>");
   body+="<br><b>已經有圖的案場：</b>"+(have.length?esc(have.join("、")):"還沒有任何案場");
+  var g=gridFor(S.area);
+  if(g&&g.blocks&&g.blocks.length){
+    var tot=0, ss=0;
+    g.blocks.forEach(function(b){ tot+=b.rows*b.cols;
+      ss+=(b.strings||[]).reduce(function(a,x){return a+x.n;},0); });
+    body+="<br><b>模組網格：</b>"+g.blocks.length+" 個區塊、共 "+tot+" 片"+
+      (ss?("，已分串 "+ss+" 片"):"，還沒填各串片數");
+  }else body+="<br><b>模組網格：</b>還沒校正——破片定位目前是點座標，不是點到那一片。";
   setNote($("dgmState"),body,mine?"ok":"warn");
 }
 $("sSnd").addEventListener("change",function(){
@@ -3005,7 +3234,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18c";
+var APP_VERSION="2026-11-18d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3240,6 +3469,7 @@ window.addEventListener("pagehide",stopCam);
 fillForms();
 renderNow(); renderItemBtns();
 refreshPhotos();
+loadGrids().then(renderDgmState);
 initPersist();
 initSW();
 startCam();
@@ -3267,6 +3497,10 @@ window.__pv={
   _login:synoLogin,
   _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
+  _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
+  _edBlocks:edBlocks, _edApply:edApplyForm, _parseStrings:parseStrings,
+  get _edit(){ return edit; }, _loadGrids:loadGrids,
+  get _grids(){ return JSON.parse(JSON.stringify(gridSaved)); },
   _gridFor:gridFor, _cellIds:cellIds, _cellOrder:cellOrder, _quadAt:quadAt,
   _renderGrid:renderPanelGrid, _panelLabel:panelLabel,
   get pick(){ return pick?JSON.parse(JSON.stringify(pick)):null; },
