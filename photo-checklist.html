@@ -130,6 +130,12 @@
   .dgm-layer{position:absolute;left:0;top:0;transform-origin:0 0;}
   .dgm-layer img{display:block;width:100%;height:100%;}
   /* 標記反向縮放，不管圖放多大都維持一樣的螢幕大小，才好瞄準 */
+  /* 每一片模組一個多邊形。平常只有極淡的框，點到的那片才填紅——
+     現場要的是「我點到哪一片」，不是把整張圖畫滿格線。 */
+  .dgm-grid{position:absolute;left:0;top:0;width:100%;height:100%;}
+  .dgm-grid .cell{fill:rgba(0,0,0,0);stroke:rgba(0,90,200,.25);stroke-width:1;
+    cursor:pointer;}
+  .dgm-grid .cell.on{fill:rgba(214,59,47,.45);stroke:#d63b2f;stroke-width:3;}
   .dgm-mark{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;
     pointer-events:none;display:none;}
   .dgm-mark.on{display:block;}
@@ -716,6 +722,7 @@
   <div class="dgm-wrap" id="brkDgmWrap">
     <div class="dgm-layer" id="brkDgmLayer">
       <img id="brkDgmImg" alt="串併圖">
+      <svg class="dgm-grid" id="brkDgmGrid" xmlns="http://www.w3.org/2000/svg"></svg>
       <div class="dgm-mark" id="brkDgmMark"><i></i><b></b><b></b><b></b><b></b></div>
     </div>
   </div>
@@ -2047,7 +2054,67 @@ function diagramFor(area){
   return null;
 }
 
+/* ── 模組網格 ──
+   有網格的案場，破片定位是「點到那一片」，不是「點一個座標」。
+
+   一個區塊＝一個四邊形（四角用相對座標 0～1），切成 rows × cols 格。
+   格子依 major／snake 排成一條順序，各串再依序吃掉自己的片數——
+   所以同一帶裡長度不同的串（例如 1-6 是 20 片、1-7 是 18 片）也排得出來。
+
+   資料與程式分開：之後補上校正介面時，改的是這份資料，不必動程式。 */
+var PANELS={};
+function gridFor(area){
+  if(PANELS[area]) return PANELS[area];
+  var a=dgmKey(area), ks=Object.keys(PANELS);
+  for(var i=0;i<ks.length;i++){
+    var k=dgmKey(ks[i]);
+    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return PANELS[ks[i]];
+  }
+  return null;
+}
+// 四邊形內的雙線性插值：(u,v) 都是 0～1，回傳相對座標
+function quadAt(q,u,v){
+  var tl=q[0],tr=q[1],br=q[2],bl=q[3];
+  var tx=tl[0]+(tr[0]-tl[0])*u, ty=tl[1]+(tr[1]-tl[1])*u;
+  var bx=bl[0]+(br[0]-bl[0])*u, by=bl[1]+(br[1]-bl[1])*u;
+  return [tx+(bx-tx)*v, ty+(by-ty)*v];
+}
+/* 把格子排成一條順序。major 決定先走列還是先走行，
+   snake 決定每走完一排要不要折返（蛇行配線就是這樣跑的）。 */
+function cellOrder(b){
+  var out=[], r, c, i;
+  if(b.major==="col"){
+    for(c=0;c<b.cols;c++){
+      for(i=0;i<b.rows;i++){
+        r=(b.snake&&c%2)?(b.rows-1-i):i;
+        out.push([r,c]);
+      }
+    }
+  }else{
+    for(r=0;r<b.rows;r++){
+      for(i=0;i<b.cols;i++){
+        c=(b.snake&&r%2)?(b.cols-1-i):i;
+        out.push([r,c]);
+      }
+    }
+  }
+  return out;
+}
+// 每一格配到哪一串、是該串第幾片
+function cellIds(b){
+  var ord=cellOrder(b), map={}, k=0;
+  (b.strings||[]).forEach(function(s){
+    for(var j=0;j<s.n;j++){
+      var rc=ord[k++];
+      if(!rc) return;
+      map[rc[0]+","+rc[1]]={str:s.name,no:j+1};
+    }
+  });
+  return {order:ord,map:map};
+}
+
 var brk=null;              // 進行中的破片；null＝沒有在跑定位流程
+var pick=null;             // 選到的那一片：{block,row,col,str,no,cx,cy}
 var BRK_STEPS=[
   {key:"外觀", title:"第 1 張：破片外觀", sub:"拍整片模組，看得出破在哪裡。"},
   {key:"序號", title:"第 2 張：模組序號", sub:"對準銘牌，序號要看得清楚。"}
@@ -2074,7 +2141,8 @@ function renderBrkBar(){
   var s=BRK_STEPS[brk.step];
   bar.classList.add("on");
   $("brkTitle").textContent="破片定位 · "+s.title;
-  $("brkSub").textContent=s.sub+"　（編號 "+brk.id+"）";
+  $("brkSub").textContent=s.sub+
+    (brk.panel?("　"+brk.panel.標示):"")+"　（編號 "+brk.id+"）";
 }
 
 /* 選到「破片」就問一次。問而不是直接進流程：有時候只是補一張記錄照，
@@ -2109,6 +2177,24 @@ function dgmDraw(){
   }else m.classList.remove("on");
 }
 // 紅色標記。半徑跟著圖的尺寸走，大圖小圖都看得見。
+// 存檔的定位圖要看得出是「哪一片」，不只是一個點
+function fillCell(x,w,h,p){
+  var g=gridFor(S.area); if(!g) return;
+  var b=null;
+  (g.blocks||[]).forEach(function(k){ if(k.id===p.block) b=k; });
+  if(!b) return;
+  var r=p.row-1, c=p.col-1;
+  var pts=[[c/b.cols,r/b.rows],[(c+1)/b.cols,r/b.rows],
+           [(c+1)/b.cols,(r+1)/b.rows],[c/b.cols,(r+1)/b.rows]]
+    .map(function(uv){ var q=quadAt(b.quad,uv[0],uv[1]); return [q[0]*w,q[1]*h]; });
+  x.save();
+  x.beginPath(); x.moveTo(pts[0][0],pts[0][1]);
+  for(var i=1;i<4;i++) x.lineTo(pts[i][0],pts[i][1]);
+  x.closePath();
+  x.fillStyle="rgba(214,59,47,.45)"; x.fill();
+  x.strokeStyle="#d63b2f"; x.lineWidth=Math.max(2,Math.min(w,h)*0.003); x.stroke();
+  x.restore();
+}
 function drawMark(x,w,h,nx,ny){
   var r=Math.max(14,Math.min(w,h)*0.018);
   var px=nx*w, py=ny*h;
@@ -2135,15 +2221,65 @@ function dgmFit(){
   dgmTy=(rh-dgmImg.naturalHeight*dgmK)/2;
   dgmDraw();
 }
+/* 把每一片模組畫成一個可以點的多邊形，疊在串併圖上。
+   用 DOM 元素而不是自己算點擊落在哪一格：瀏覽器的命中判定本來就精準，
+   四邊形再怎麼歪斜都不會算錯，也省掉反解雙線性插值。 */
+function renderPanelGrid(){
+  var host=$("brkDgmGrid");
+  host.innerHTML="";
+  var g=gridFor(S.area);
+  if(!g||!dgmImg){ host.style.display="none"; return null; }
+  var W=dgmImg.naturalWidth, H=dgmImg.naturalHeight;
+  host.style.display="block";
+  host.setAttribute("viewBox","0 0 "+W+" "+H);
+  var NS="http://www.w3.org/2000/svg", n=0;
+  (g.blocks||[]).forEach(function(b){
+    var ids=cellIds(b);
+    for(var r=0;r<b.rows;r++) for(var c=0;c<b.cols;c++){
+      var pts=[[c/b.cols,r/b.rows],[(c+1)/b.cols,r/b.rows],
+               [(c+1)/b.cols,(r+1)/b.rows],[c/b.cols,(r+1)/b.rows]]
+        .map(function(uv){ var p=quadAt(b.quad,uv[0],uv[1]);
+                           return (p[0]*W).toFixed(1)+","+(p[1]*H).toFixed(1); });
+      var el=document.createElementNS(NS,"polygon");
+      el.setAttribute("points",pts.join(" "));
+      el.setAttribute("class","cell");
+      var hit=ids.map[r+","+c];
+      el.__p={block:b.id,row:r+1,col:c+1,
+              str:hit?hit.str:"",no:hit?hit.no:0};
+      var mid=quadAt(b.quad,(c+0.5)/b.cols,(r+0.5)/b.rows);
+      el.__p.cx=mid[0]; el.__p.cy=mid[1];
+      host.appendChild(el); n++;
+    }
+  });
+  return n;
+}
+function panelLabel(p){
+  var rc=p.block+" R"+p.row+"-C"+p.col;
+  return p.str?(p.str+" #"+p.no+"（"+rc+"）"):rc;
+}
+function selectCell(el){
+  Array.prototype.forEach.call($("brkDgmGrid").querySelectorAll(".cell.on"),
+    function(n){ n.classList.remove("on"); });
+  el.classList.add("on");
+  pick=el.__p;
+  dgmMark={x:pick.cx,y:pick.cy};
+  $("btnDgmOk").disabled=false;
+  $("brkDgmTip").innerHTML="選到：<b>"+esc(panelLabel(pick))+"</b>　點別片可以改。";
+  dgmDraw();
+}
+
 function openDiagram(){
   var src=diagramFor(S.area);
   if(!src) return;
   closeAsk();
-  dgmMark=null; $("btnDgmOk").disabled=true;
+  dgmMark=null; pick=null; $("btnDgmOk").disabled=true;
+  $("brkDgmTip").innerHTML=gridFor(S.area)
+    ? "點破片的那一片模組。<b>兩指可以放大</b>，點錯再點一次就好。"
+    : "用手指點破片的位置。<b>兩指可以放大</b>，點錯再點一次就好。";
   $("brkDgm").classList.add("on");
   $("brkDgmImg").src=src;
   var im=new Image();
-  im.onload=function(){ dgmImg=im; dgmFit(); };
+  im.onload=function(){ dgmImg=im; dgmFit(); renderPanelGrid(); };
   im.onerror=function(){
     closeDiagram();
     alert("串併圖讀不出來，這次先用一般方式拍照。");
@@ -2193,6 +2329,13 @@ function dgmXY(e){
     if(Object.keys(dgmPt).length<2) dgmPinch=0;
     if(!dgmImg||!fast||!still) { dgmDownXY=null; return; }
     dgmDownXY=null;
+    /* 有網格的案場就一定要點到某一片。用瀏覽器的命中判定去問那個點底下
+       是哪個多邊形——四邊形再歪斜也不會算錯，也省掉反解雙線性插值。 */
+    if(gridFor(S.area)){
+      var hit=document.elementFromPoint(e.clientX,e.clientY);
+      if(hit&&hit.classList&&hit.classList.contains("cell")) selectCell(hit);
+      return;                                  // 點到空隙就當沒點，不要亂標
+    }
     var p=dgmXY(e);
     if(p.x<0||p.x>1||p.y<0||p.y>1) return;   // 點到圖外不算
     dgmMark=p; dgmDraw(); $("btnDgmOk").disabled=false;
@@ -2217,7 +2360,10 @@ function confirmMark(){
   if(!dgmMark||!dgmImg) return;
   var when=new Date();
   brk={id:fmtFile(when), area:S.area, work:S.work, who:whoName(),
-       x:dgmMark.x, y:dgmMark.y, time:when.toISOString(), step:0, serial:""};
+       x:dgmMark.x, y:dgmMark.y, time:when.toISOString(), step:0, serial:"",
+       panel:pick?{區塊:pick.block,列:pick.row,行:pick.col,
+                   串:pick.str,串內序號:pick.no,
+                   標示:panelLabel(pick)}:null};
   /* 存檔用的定位圖：向量來源可以畫多大就多大，這裡拉到長邊 2400，
      之後在電腦上放大看破片位置才清楚。 */
   var nw=dgmImg.naturalWidth, nh=dgmImg.naturalHeight;
@@ -2227,6 +2373,7 @@ function confirmMark(){
   var x=cv.getContext("2d");
   x.fillStyle="#fff"; x.fillRect(0,0,cv.width,cv.height);
   x.drawImage(dgmImg,0,0,cv.width,cv.height);
+  if(pick) fillCell(x,cv.width,cv.height,pick);
   drawMark(x,cv.width,cv.height,dgmMark.x,dgmMark.y);
   closeDiagram();
   cv.toBlob(function(blob){
@@ -2251,6 +2398,7 @@ function brkFinish(){
   /* JSON 是給之後的破片管理系統讀的：座標是相對值（0～1），
      換圖或換螢幕尺寸都還對得上，不會因為圖重畫過就失準。 */
   var data={編號:b.id,案場:b.area,工作:b.work,人員:b.who,時間:b.time,
+            模組:b.panel||null,
             座標:{x:Number(b.x.toFixed(5)),y:Number(b.y.toFixed(5))},
             座標說明:"相對於串併圖的比例，左上角為 0,0",
             序號:b.serial,檔案:["定位圖.jpg","外觀.jpg","序號.jpg"]};
@@ -2857,7 +3005,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18b";
+var APP_VERSION="2026-11-18c";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3118,6 +3266,10 @@ window.__pv={
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin,
   _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
+  _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
+  _gridFor:gridFor, _cellIds:cellIds, _cellOrder:cellOrder, _quadAt:quadAt,
+  _renderGrid:renderPanelGrid, _panelLabel:panelLabel,
+  get pick(){ return pick?JSON.parse(JSON.stringify(pick)):null; },
   _setZoom:function(k,tx,ty){ dgmK=k; if(tx!=null)dgmTx=tx; if(ty!=null)dgmTy=ty; dgmDraw(); },
   get _dgmK(){ return dgmK; }, _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
   _askBreak:askBreakLoc, _openDgm:openDiagram, _confirmMark:confirmMark,
