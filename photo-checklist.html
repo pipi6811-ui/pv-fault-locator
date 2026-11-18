@@ -103,6 +103,44 @@
     .flash.go,.flash-ok.go{animation:fl .3s steps(2,end);}
   }
 
+  /* ── 破片定位 ──
+     詢問視窗、串併圖、拍攝引導。全都疊在最上層，現場一次只專心做一件事。 */
+  .ovl{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.82);
+    display:none;place-items:center;padding:16px;}
+  .ovl.on{display:grid;}
+  .ovl-card{background:var(--paper);border:2px solid var(--ink);border-radius:12px;
+    padding:18px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.5);}
+  .ovl-card h3{margin:0 0 8px;font-size:18px;font-weight:800;}
+  .ovl-card .btnrow{margin-top:14px;}
+  .ovl-card .btnrow button{padding:16px 12px;font-size:16px;}
+
+  /* 串併圖：整頁，可拖可縮。屋頂上手指粗，圖又密，不能縮放等於不能用。 */
+  .dgm{position:fixed;inset:0;z-index:60;background:#111;display:none;
+    flex-direction:column;}
+  .dgm.on{display:flex;}
+  .dgm-top{padding:10px 14px;color:#fff;font-size:13px;font-weight:700;
+    background:#000;line-height:1.5;}
+  .dgm-top b{color:var(--hazard);}
+  .dgm-wrap{flex:1;overflow:hidden;position:relative;touch-action:none;
+    background:#222;}
+  .dgm-wrap canvas{position:absolute;left:0;top:0;transform-origin:0 0;}
+  .dgm-bar{padding:10px;display:flex;gap:8px;background:#000;}
+  .dgm-bar button{flex:1;padding:16px 10px;font-size:16px;font-weight:800;
+    font-family:var(--sans);border:2px solid var(--ink);border-radius:10px;}
+  .dgm-bar .ok{background:var(--hazard);color:var(--ink);}
+  .dgm-bar .ok:disabled{opacity:.45;}
+  .dgm-bar .no{background:#fff;color:var(--ink);}
+
+  /* 拍攝引導列：在拍照頁最上面，隨時看得到還剩幾張 */
+  .brk-bar{display:none;margin-bottom:10px;padding:12px 14px;border-radius:10px;
+    background:var(--hazard);border:2px solid var(--ink);}
+  .brk-bar.on{display:block;}
+  .brk-bar .t{font-size:16px;font-weight:800;}
+  .brk-bar .s{font-size:12.5px;margin-top:3px;line-height:1.5;}
+  .brk-bar button{margin-top:9px;padding:7px 12px;font-size:13px;font-weight:700;
+    font-family:var(--sans);border:2px solid var(--ink);border-radius:8px;
+    background:#fff;color:var(--ink);}
+
   .shutter{width:100%;margin-top:10px;padding:20px 16px;font-size:20px;font-weight:800;
     font-family:var(--sans);border:2px solid var(--ink);border-radius:12px;
     background:var(--ink);color:var(--panel);cursor:pointer;}
@@ -239,6 +277,12 @@
 
   <!-- ══════════ 拍照 ══════════ -->
   <div id="pShoot" class="page on">
+
+    <div class="brk-bar" id="brkBar">
+      <div class="t" id="brkTitle">破片定位</div>
+      <div class="s" id="brkSub"></div>
+      <button type="button" id="btnBrkCancel">取消這次定位</button>
+    </div>
 
     <div class="now">
       <div class="now-k">浮水印的檢查項目</div>
@@ -607,12 +651,76 @@
         </div>
       </div>
     </section>
+
+    <section>
+      <div class="sec-head"><span class="num">11</span><h2>破片定位</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="chk"><input id="sBreakLoc" type="checkbox"><span>選到「破片」時問要不要定位</span></label>
+        </div>
+        <p class="hint" style="margin-top:0">
+          點「做定位」會打開這個案場的<b>串併圖</b>，用手指點出破片位置（兩指可放大），
+          接著引導你拍<b>破片外觀</b>和<b>模組序號</b>兩張。
+          三張圖加一份資料檔會送到 NAS 的 <code>98 破片管理</code>，
+          之後做破片管理系統時直接讀資料夾就有結構化資料。
+        </p>
+        <div class="note" id="dgmState"></div>
+        <div class="note warn">
+          <b>串併圖是跟著程式走的</b>，不是從 NAS 抓 ——
+          屋頂上沒訊號也打得開，因為定位正好是現場當下要做的事。
+          代價是<b>新案場要先把圖加進程式</b>，沒有圖的案場只會提示沒辦法定位，
+          不影響平常拍照。
+        </div>
+      </div>
+    </section>
   </div>
 
   <footer id="ver">—</footer>
 </div>
 
 <canvas id="work" class="hidden"></canvas>
+
+<!-- 破片定位：問要不要做 -->
+<div class="ovl" id="brkAsk">
+  <div class="ovl-card">
+    <h3>這片破片要做定位嗎？</h3>
+    <p class="hint" style="margin-top:0" id="brkAskMsg"></p>
+    <div class="btnrow">
+      <button class="b1" id="btnBrkYes" type="button">做定位</button>
+      <button class="b2" id="btnBrkNo" type="button">只拍照</button>
+    </div>
+  </div>
+</div>
+
+<!-- 破片定位：串併圖 -->
+<div class="dgm" id="brkDgm">
+  <div class="dgm-top" id="brkDgmTip">
+    用手指點破片的位置。<b>兩指可以放大</b>，點錯再點一次就好。
+  </div>
+  <div class="dgm-wrap" id="brkDgmWrap"><canvas id="brkDgmCv"></canvas></div>
+  <div class="dgm-bar">
+    <button class="no" id="btnDgmCancel" type="button">取消</button>
+    <button class="ok" id="btnDgmOk" type="button" disabled>確定位置</button>
+  </div>
+</div>
+
+<!-- 破片定位：收尾，可選填序號 -->
+<div class="ovl" id="brkDone">
+  <div class="ovl-card">
+    <h3>兩張都拍好了</h3>
+    <p class="hint" style="margin-top:0">
+      序號想打字記下來的話填這裡，之後破片管理系統可以直接用序號搜尋。
+      趕時間就留空，照片上本來就有。
+    </p>
+    <div class="field">
+      <label>序號（可留空）</label>
+      <input id="brkSerial" type="text" placeholder="例如 JAM72S30-540/MR-001234">
+    </div>
+    <div class="btnrow">
+      <button class="b1" id="btnBrkSave" type="button">完成</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
@@ -718,6 +826,7 @@ var DEFAULT_SET={area:"新光國小- 屋頂型",work:"Q3定檢",
   exclude:[],        // 訓練時要排除哪些人的樣本
   vib:true, snd:true, flash:true,   // 拍照回饋：震動、快門聲、畫面閃一下
   ai:true,              // 拍照時自動辨識並跳項目
+  breakLoc:true,        // 選到破片時詢問要不要做定位
   remoteKeys:[],        // 學起來的遙控器按鍵（各廠牌送的鍵不一樣）
   tapShoot:true,        // 點取景畫面就拍照
   wideCam:"",           // 哪一顆算廣角：空＝自動判斷，"off"＝不提供 0.5×
@@ -861,6 +970,8 @@ function renderItemBtns(){
     b.appendChild(t); b.appendChild(n);
     b.addEventListener("click",function(){
       curItem=name; sinceTap=0; renderNow(); renderItemBtns();
+      // 選到破片就問要不要定位。定位流程進行中不再問，免得打斷自己。
+      if(name==="破片") askBreakLoc();
     });
     box.appendChild(b);
   });
@@ -1759,23 +1870,34 @@ function shoot(){
     return;
   }
 
+  // 破片定位進行中：這一張是流程裡的第幾張，由 brk 決定，AI 不插手
+  var inBrk=!!brk;
   Promise.resolve(pending).then(function(hit){
     var overrode=false;
     var asShown=hit?displayOf(hit.label):null;
-    if(hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
+    if(!inBrk&&hit&&hit.prob>=0.7&&asShown&&asShown!==curItem){
       curItem=asShown; overrode=true;
       fb("ai");
     }
-    if(hit){
+    if(!inBrk&&hit){
       aiChip("AI："+(asShown||hit.label)+" "+Math.round(hit.prob*100)+"%");
     }
     var when=new Date();
-    stamp(cv,curItem,when);
+    // 浮水印寫「破片-外觀」「破片-序號」，照片本身就說得出自己是哪一張
+    stamp(cv,inBrk?brkLabel():curItem,when);
     return new Promise(function(res){ cv.toBlob(res,"image/jpeg",0.85); }).then(function(blob){
       if(!blob) throw new Error("照片產生失敗");
-      return dbAdd({item:curItem,area:S.area,work:S.work,blob:blob,
-        time:when.toISOString(),uploaded:false});
+      var rec={item:curItem,area:S.area,work:S.work,blob:blob,
+        time:when.toISOString(),uploaded:false};
+      if(inBrk) brkTag(rec);
+      return dbAdd(rec);
     }).then(function(){
+      if(inBrk){
+        brk.step++;
+        if(brk.step>=BRK_STEPS.length) brkAskSerial();
+        renderBrkBar();
+        return;   // 破片的兩張不拿去訓練：外觀和序號各自長得很不一樣
+      }
       // AI 改過的那張不留做訓練資料：那是模型自己的猜測，拿回去訓練只會把錯誤放大
       if(overrode) return;
       // 「其他」底下什麼都有，收進去只會讓模型到處誤判
@@ -1863,8 +1985,251 @@ function shareSelected(){
   });
 }
 function fileNameOf(p){
+  // 破片流程的檔案用固定檔名（定位圖/外觀/序號/資料），資料夾本身就帶了編號，
+  // 之後的破片管理系統照資料夾讀就好，不必解析檔名
+  if(p.name) return p.name;
   return fmtFile(new Date(p.time))+"_"+(p.item||"未分類")+".jpg";
 }
+
+/* ═══════════ 破片定位 ═══════════
+   現場發現破片時，先在案場的串併圖上點出位置，再拍兩張（外觀、序號）。
+   三張圖連同一份 JSON 一起進 NAS 的破片資料夾，之後的破片管理系統直接
+   讀資料夾就有結構化資料，不必靠檔名回推。
+
+   串併圖寫死在程式裡：圖跟著程式走，屋頂上沒訊號也打得開——破片定位
+   正好是現場當下要做的事，不能依賴連線。新增案場就在 DIAGRAMS 多一筆，
+   key 用設定頁第 2 區「維運區域」的名稱，值是圖片的 data URI。 */
+var BREAK_ROOT="/暘勤/98 破片管理";
+var DIAGRAMS={};
+function diagramFor(area){ return DIAGRAMS[area]||null; }
+
+var brk=null;              // 進行中的破片；null＝沒有在跑定位流程
+var BRK_STEPS=[
+  {key:"外觀", title:"第 1 張：破片外觀", sub:"拍整片模組，看得出破在哪裡。"},
+  {key:"序號", title:"第 2 張：模組序號", sub:"對準銘牌，序號要看得清楚。"}
+];
+function brkDir(b){
+  return BREAK_ROOT+"/"+(safeFolder(b.area)||"未設定區域")+"/"+b.id;
+}
+function brkLabel(){
+  var s=BRK_STEPS[brk.step];
+  return s?("破片-"+s.key):"破片";
+}
+// 破片流程中拍的照片：改浮水印用的名稱、指定上傳資料夾、給固定檔名
+function brkTag(rec){
+  var s=BRK_STEPS[brk.step];
+  rec.item=brkLabel();
+  rec.dest=brkDir(brk);
+  rec.name=(s?s.key:"照片")+".jpg";
+  rec.brkId=brk.id;
+}
+
+function renderBrkBar(){
+  var bar=$("brkBar");
+  if(!brk||brk.step>=BRK_STEPS.length){ bar.classList.remove("on"); return; }
+  var s=BRK_STEPS[brk.step];
+  bar.classList.add("on");
+  $("brkTitle").textContent="破片定位 · "+s.title;
+  $("brkSub").textContent=s.sub+"　（編號 "+brk.id+"）";
+}
+
+/* 選到「破片」就問一次。問而不是直接進流程：有時候只是補一張記錄照，
+   不是每片都要定位。 */
+function askBreakLoc(){
+  if(brk) return;                       // 已經在跑了，不要再問
+  if(S.breakLoc===false) return;
+  var msg=diagramFor(S.area)
+    ? "點「做定位」會打開 "+S.area+" 的串併圖，用手指點出破片位置，"+
+      "接著引導你拍兩張：破片外觀和模組序號。"
+    : "這個案場（"+(S.area||"未設定區域")+"）還沒有串併圖，沒辦法定位。"+
+      "要加的話跟維護的人說一聲。現在先照平常方式拍就好。";
+  $("brkAskMsg").textContent=msg;
+  $("btnBrkYes").disabled=!diagramFor(S.area);
+  $("brkAsk").classList.add("on");
+}
+function closeAsk(){ $("brkAsk").classList.remove("on"); }
+
+/* ── 串併圖檢視：拖曳、兩指縮放、點選 ── */
+var dgmImg=null, dgmK=1, dgmTx=0, dgmTy=0, dgmPt={}, dgmMark=null,
+    dgmDownAt=0, dgmDownXY=null, dgmPinch=0;
+function dgmDraw(){
+  var cv=$("brkDgmCv");
+  cv.style.transform="translate("+dgmTx+"px,"+dgmTy+"px) scale("+dgmK+")";
+}
+function dgmPaint(){
+  var cv=$("brkDgmCv");
+  if(!dgmImg) return;
+  cv.width=dgmImg.naturalWidth; cv.height=dgmImg.naturalHeight;
+  var x=cv.getContext("2d");
+  x.drawImage(dgmImg,0,0);
+  if(dgmMark) drawMark(x,cv.width,cv.height,dgmMark.x,dgmMark.y);
+}
+// 紅色標記。半徑跟著圖的尺寸走，大圖小圖都看得見。
+function drawMark(x,w,h,nx,ny){
+  var r=Math.max(14,Math.min(w,h)*0.018);
+  var px=nx*w, py=ny*h;
+  x.save();
+  x.strokeStyle="#d63b2f"; x.lineWidth=Math.max(3,r*0.3);
+  x.beginPath(); x.arc(px,py,r,0,Math.PI*2); x.stroke();
+  x.fillStyle="rgba(214,59,47,.35)"; x.fill();
+  x.beginPath();
+  x.moveTo(px-r*1.9,py); x.lineTo(px-r*0.5,py);
+  x.moveTo(px+r*0.5,py); x.lineTo(px+r*1.9,py);
+  x.moveTo(px,py-r*1.9); x.lineTo(px,py-r*0.5);
+  x.moveTo(px,py+r*0.5); x.lineTo(px,py+r*1.9);
+  x.stroke();
+  x.restore();
+}
+function dgmFit(){
+  var w=$("brkDgmWrap");
+  var rw=w.clientWidth, rh=w.clientHeight;
+  dgmK=Math.min(rw/dgmImg.naturalWidth,rh/dgmImg.naturalHeight);
+  dgmTx=(rw-dgmImg.naturalWidth*dgmK)/2;
+  dgmTy=(rh-dgmImg.naturalHeight*dgmK)/2;
+  dgmDraw();
+}
+function openDiagram(){
+  var src=diagramFor(S.area);
+  if(!src) return;
+  closeAsk();
+  dgmMark=null; $("btnDgmOk").disabled=true;
+  $("brkDgm").classList.add("on");
+  var im=new Image();
+  im.onload=function(){ dgmImg=im; dgmPaint(); dgmFit(); };
+  im.onerror=function(){
+    closeDiagram();
+    alert("串併圖讀不出來，這次先用一般方式拍照。");
+  };
+  im.src=src;
+}
+function closeDiagram(){ $("brkDgm").classList.remove("on"); dgmPt={}; }
+
+function dgmXY(e){
+  var r=$("brkDgmWrap").getBoundingClientRect();
+  return {x:(e.clientX-r.left-dgmTx)/dgmK/dgmImg.naturalWidth,
+          y:(e.clientY-r.top -dgmTy)/dgmK/dgmImg.naturalHeight};
+}
+(function wireDgm(){
+  var w=$("brkDgmWrap");
+  w.addEventListener("pointerdown",function(e){
+    w.setPointerCapture(e.pointerId);
+    dgmPt[e.pointerId]={x:e.clientX,y:e.clientY};
+    var n=Object.keys(dgmPt).length;
+    if(n===1){ dgmDownAt=Date.now(); dgmDownXY={x:e.clientX,y:e.clientY}; }
+    if(n===2){ dgmPinch=pinchDist(); dgmDownXY=null; }
+  });
+  w.addEventListener("pointermove",function(e){
+    if(!dgmPt[e.pointerId]||!dgmImg) return;
+    var prev=dgmPt[e.pointerId];
+    dgmPt[e.pointerId]={x:e.clientX,y:e.clientY};
+    var ids=Object.keys(dgmPt);
+    if(ids.length===1){
+      dgmTx+=e.clientX-prev.x; dgmTy+=e.clientY-prev.y; dgmDraw();
+    }else if(ids.length===2&&dgmPinch){
+      var d=pinchDist();
+      if(!d) return;
+      var k2=Math.max(0.1,Math.min(12,dgmK*(d/dgmPinch)));
+      // 以兩指中心為支點縮放，手感才對
+      var r=w.getBoundingClientRect(), c=pinchMid();
+      var cx=c.x-r.left, cy=c.y-r.top;
+      dgmTx=cx-(cx-dgmTx)*(k2/dgmK);
+      dgmTy=cy-(cy-dgmTy)*(k2/dgmK);
+      dgmK=k2; dgmPinch=d; dgmDraw();
+    }
+  });
+  function up(e){
+    var fast=Date.now()-dgmDownAt<400;
+    var still=dgmDownXY&&Math.abs(e.clientX-dgmDownXY.x)<10&&
+                          Math.abs(e.clientY-dgmDownXY.y)<10;
+    delete dgmPt[e.pointerId];
+    if(Object.keys(dgmPt).length<2) dgmPinch=0;
+    if(!dgmImg||!fast||!still) { dgmDownXY=null; return; }
+    dgmDownXY=null;
+    var p=dgmXY(e);
+    if(p.x<0||p.x>1||p.y<0||p.y>1) return;   // 點到圖外不算
+    dgmMark=p; dgmPaint(); $("btnDgmOk").disabled=false;
+  }
+  w.addEventListener("pointerup",up);
+  w.addEventListener("pointercancel",function(e){
+    delete dgmPt[e.pointerId]; dgmPinch=0; dgmDownXY=null;
+  });
+  function pinchDist(){
+    var a=Object.keys(dgmPt).map(function(k){return dgmPt[k];});
+    if(a.length<2) return 0;
+    return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y);
+  }
+  function pinchMid(){
+    var a=Object.keys(dgmPt).map(function(k){return dgmPt[k];});
+    return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2};
+  }
+})();
+
+/* 確定位置：把標好的圖存成第一個檔，然後開始引導拍照 */
+function confirmMark(){
+  if(!dgmMark||!dgmImg) return;
+  var when=new Date();
+  brk={id:fmtFile(when), area:S.area, work:S.work, who:whoName(),
+       x:dgmMark.x, y:dgmMark.y, time:when.toISOString(), step:0, serial:""};
+  var cv=document.createElement("canvas");
+  cv.width=dgmImg.naturalWidth; cv.height=dgmImg.naturalHeight;
+  var x=cv.getContext("2d");
+  x.drawImage(dgmImg,0,0);
+  drawMark(x,cv.width,cv.height,dgmMark.x,dgmMark.y);
+  closeDiagram();
+  cv.toBlob(function(blob){
+    if(!blob){ alert("定位圖存不起來，請再試一次。"); brk=null; renderBrkBar(); return; }
+    dbAdd({item:"破片-定位圖",area:S.area,work:S.work,blob:blob,
+           time:when.toISOString(),uploaded:false,
+           dest:brkDir(brk),name:"定位圖.jpg",brkId:brk.id})
+      .then(function(){ renderBrkBar(); fb("shot"); return refreshPhotos(); });
+  },"image/jpeg",0.9);
+}
+
+/* 兩張都拍完 → 問序號 → 寫一份 JSON 收尾 */
+function brkAskSerial(){
+  $("brkSerial").value="";
+  $("brkDone").classList.add("on");
+}
+function brkFinish(){
+  if(!brk){ $("brkDone").classList.remove("on"); return Promise.resolve(); }
+  var b=brk;
+  b.serial=$("brkSerial").value.trim();
+  $("brkDone").classList.remove("on");
+  /* JSON 是給之後的破片管理系統讀的：座標是相對值（0～1），
+     換圖或換螢幕尺寸都還對得上，不會因為圖重畫過就失準。 */
+  var data={編號:b.id,案場:b.area,工作:b.work,人員:b.who,時間:b.time,
+            座標:{x:Number(b.x.toFixed(5)),y:Number(b.y.toFixed(5))},
+            座標說明:"相對於串併圖的比例，左上角為 0,0",
+            序號:b.serial,檔案:["定位圖.jpg","外觀.jpg","序號.jpg"]};
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  brk=null; renderBrkBar();
+  return dbAdd({item:"破片-資料",area:b.area,work:b.work,blob:blob,
+                time:b.time,uploaded:false,
+                dest:brkDir(b),name:"資料.json",brkId:b.id})
+    .then(refreshPhotos);
+}
+/* 取消要連定位圖一起收掉。留著的話它照樣會上傳，在 NAS 的破片管理裡
+   變成一個只有定位圖、沒有照片也沒有資料檔的空殼資料夾——未來的管理
+   系統會把它當成一筆不完整的紀錄，比沒有還糟。
+   已經拍進去的外觀／序號也一併刪：那兩張是這次定位的一部分，
+   留下來等於留了一組對不上任何紀錄的照片。 */
+function brkCancel(){
+  if(!brk) return;
+  var id=brk.id;
+  brk=null; renderBrkBar();
+  $("brkDone").classList.remove("on");
+  var ids=photos.filter(function(p){ return p.brkId===id; })
+                .map(function(p){ return p.id; });
+  if(!ids.length) return Promise.resolve();
+  return dbDel(ids).then(refreshPhotos);
+}
+
+$("btnBrkYes").addEventListener("click",openDiagram);
+$("btnBrkNo").addEventListener("click",closeAsk);
+$("btnDgmCancel").addEventListener("click",closeDiagram);
+$("btnDgmOk").addEventListener("click",confirmMark);
+$("btnBrkSave").addEventListener("click",brkFinish);
+$("btnBrkCancel").addEventListener("click",brkCancel);
 
 /* ═══════════ Synology 上傳 ═══════════ */
 /* 登入（SYNO.API.Auth）和檔案存取（SYNO.FileStation）是兩組獨立的 API，
@@ -2008,7 +2373,8 @@ function synoUpload(sid,p){
   fd.append("api","SYNO.FileStation.Upload");
   fd.append("version","2");
   fd.append("method","upload");
-  fd.append("path",nasPath());
+  // 破片流程的檔案各自帶目的資料夾；其餘照片走案場資料夾
+  fd.append("path",p.dest||nasPath());
   fd.append("create_parents","true");
   fd.append("overwrite","true");
   fd.append("_sid",sid);
@@ -2163,6 +2529,7 @@ function fillForms(){
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
   $("sTapShoot").checked=!!S.tapShoot; $("sFlash").checked=!!S.flash;
   $("sAi").checked=aiOn(); renderAiState();
+  $("sBreakLoc").checked=S.breakLoc!==false; renderDgmState();
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
 }
@@ -2235,6 +2602,18 @@ function renderAiState(){
 $("sAi").addEventListener("change",function(){
   S.ai=$("sAi").checked; writeJSON(SET_KEY,S); renderAiState();
 });
+$("sBreakLoc").addEventListener("change",function(){
+  S.breakLoc=$("sBreakLoc").checked; writeJSON(SET_KEY,S);
+});
+// 哪些案場有圖、目前這個有沒有——現場最想知道的就這兩件事
+function renderDgmState(){
+  var have=Object.keys(DIAGRAMS);
+  var mine=!!diagramFor(S.area);
+  var body="<b>目前案場：</b>"+esc(S.area||"未設定")+
+    (mine?" —— 有串併圖 ✓":" —— <b>沒有串併圖，無法定位</b>");
+  body+="<br><b>已經有圖的案場：</b>"+(have.length?esc(have.join("、")):"還沒有任何案場");
+  setNote($("dgmState"),body,mine?"ok":"warn");
+}
 $("sSnd").addEventListener("change",function(){
   S.snd=$("sSnd").checked; writeJSON(SET_KEY,S); if(S.snd) snd("shot");
 });
@@ -2425,7 +2804,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-09a";
+var APP_VERSION="2026-11-18a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -2684,7 +3063,13 @@ window.__pv={
   _shared:shAll, _shClear:shClear, _push:pushSamples, _pull:pullShared,
   get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
-  _login:synoLogin, get featVer(){ return FEAT_VER; },
+  _login:synoLogin,
+  _diagrams:DIAGRAMS, _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
+  _askBreak:askBreakLoc, _openDgm:openDiagram, _confirmMark:confirmMark,
+  _brkFinish:brkFinish, _brkCancel:brkCancel, _brkDir:brkDir,
+  get brk(){ return brk?JSON.parse(JSON.stringify(brk)):null; },
+  get _dgmMark(){ return dgmMark; }, _brkRoot:BREAK_ROOT,
+ get featVer(){ return FEAT_VER; },
   _safeFolder:safeFolder,
   _fb:fb, _canVib:canVib, _fbPattern:FB, _flash:flashScreen,
   _aiOn:aiOn, _aiChip:aiChip, _renderAiState:renderAiState,
