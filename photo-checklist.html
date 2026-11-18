@@ -2124,23 +2124,39 @@ var DIAGRAMS={
 function dgmKey(s){
   return String(s==null?"":s).replace(/[\s\-_－—–()（）.。、,，]/g,"");
 }
-function diagramFor(area){
-  // 從 NAS 抓下來的優先：那是現場自己維護的版本，比程式內建的新
-  var c=dgmCache[dgmKey(area)];
-  if(c&&c.uri) return c.uri;
-  var cks=Object.keys(dgmCache), ca=dgmKey(area);
-  for(var ci=0;ci<cks.length;ci++)
-    if(cks[ci]&&ca&&(ca.indexOf(cks[ci])>=0||cks[ci].indexOf(ca)>=0)
-       &&dgmCache[cks[ci]].uri) return dgmCache[cks[ci]].uri;
-  if(DIAGRAMS[area]) return DIAGRAMS[area];
+/* 從一堆名稱裡挑出跟 area 最相符的那一個。
+   完全相符最優先；都不完全相符時取「最長的那個相符的」。
+   取最長很重要：有了「三民國小」和「三民國小-風雨球場」兩個案場之後，
+   前者是後者的子字串，只看「有沒有包含」會讓風雨球場拿到另一個案場的圖。 */
+/* 只接受完全相符（正規化後）。
+   用在「會算出片號」的東西上：網格與校正範本。
+   圖抓錯一眼就看得出來，但網格抓錯是安靜地算出錯的片號——
+   「三民國小-風雨球場」套用「三民國小」的 15×7，每一片編號都是錯的，
+   而且沒有任何跡象。寧可讓它從空白開始，也不要給錯的。 */
+function exactKey(keys,area){
   var a=dgmKey(area);
   if(!a) return null;
-  var ks=Object.keys(DIAGRAMS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return DIAGRAMS[ks[i]];
-  }
+  for(var i=0;i<keys.length;i++) if(dgmKey(keys[i])===a) return keys[i];
   return null;
+}
+function bestKey(keys,area){
+  var a=dgmKey(area);
+  if(!a) return null;
+  var loose=null, llen=-1;
+  for(var i=0;i<keys.length;i++){
+    var k=dgmKey(keys[i]);
+    if(!k) continue;
+    if(k===a) return keys[i];
+    if((a.indexOf(k)>=0||k.indexOf(a)>=0)&&k.length>llen){ loose=keys[i]; llen=k.length; }
+  }
+  return loose;
+}
+function diagramFor(area){
+  // 從 NAS 抓下來的優先：那是現場自己維護的版本，比程式內建的新
+  var ck=bestKey(Object.keys(dgmCache),area);
+  if(ck&&dgmCache[ck]&&dgmCache[ck].uri) return dgmCache[ck].uri;
+  var dk=bestKey(Object.keys(DIAGRAMS),area);
+  return dk?DIAGRAMS[dk]:null;
 }
 
 /* ── 模組網格 ──
@@ -2199,8 +2215,15 @@ function listDiagrams(sid){
     }).catch(function(){ return []; });
 }
 // 檔名（去掉副檔名）就是案場名，比對跟串併圖一樣寬鬆
-function dgmFileMatches(name,area){
+function dgmFileMatches(name,area,allNames){
   var base=String(name||"").replace(/\.(svg|png|jpe?g)$/i,"");
+  // 有候選清單就挑最相符的那一個：「三民國小」是「三民國小-風雨球場」的
+  // 子字串，只看包含關係會兩個都算中
+  if(allNames&&allNames.length){
+    var bases=allNames.map(function(n){
+      return String(n||"").replace(/\.(svg|png|jpe?g)$/i,""); });
+    return bestKey(bases,area)===base;
+  }
   var a=dgmKey(area), b=dgmKey(base);
   return !!(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0));
 }
@@ -2221,7 +2244,8 @@ function pullDiagrams(area,onNote){
     say("查看 "+DGM_DIR+" …");
     return listDiagrams(sid).then(function(files){
       if(!files.length) throw new Error("NAS 上的 "+DGM_DIR+" 裡沒有圖片檔（svg／png／jpg）");
-      var want=area?files.filter(function(f){ return dgmFileMatches(f.name,area); }):files;
+      var all=files.map(function(f){ return f.name; });
+      var want=area?files.filter(function(f){ return dgmFileMatches(f.name,area,all); }):files;
       if(!want.length)
         throw new Error("找不到「"+area+"」的串併圖。NAS 上現有："+
           files.map(function(f){return f.name;}).join("、"));
@@ -2248,25 +2272,18 @@ function pullDiagrams(area,onNote){
 }
 
 function seedFor(area){
-  if(SEEDS[area]) return SEEDS[area];
-  var a=dgmKey(area), ks=Object.keys(SEEDS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return SEEDS[ks[i]];
-  }
-  return null;
+  // 校正範本同理：給錯的行列數，校正出來的每一片都是錯的
+  var k=exactKey(Object.keys(SEEDS),area);
+  return k?SEEDS[k]:null;
 }
 function gridFor(area){
   // 現場自己校正過的優先，其次才是程式內建的
+  // 自己校正存下來的：key 本來就是正規化後的名稱，等同完全相符
   var mine=gridSaved[gridKey(area)];
   if(mine&&mine.blocks&&mine.blocks.length) return mine;
-  if(PANELS[area]) return PANELS[area];
-  var a=dgmKey(area), ks=Object.keys(PANELS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return PANELS[ks[i]];
-  }
-  return null;
+  // 網格會算出片號，所以只認完全相符（見 exactKey）
+  var k=exactKey(Object.keys(PANELS),area);
+  return k?PANELS[k]:null;
 }
 // 四邊形內的雙線性插值：(u,v) 都是 0～1，回傳相對座標
 function quadAt(q,u,v){
@@ -3412,7 +3429,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18g";
+var APP_VERSION="2026-11-18h";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3677,6 +3694,7 @@ window.__pv={
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
   _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor,
   _pullDgm:pullDiagrams, _dgmDir:DGM_DIR, _dgmMatch:dgmFileMatches,
+  _bestKey:bestKey, _exactKey:exactKey, _dgmKey:dgmKey,
   get _dgmCache(){ return JSON.parse(JSON.stringify(dgmCache)); },
   _loadDgmCache:loadDiagramCache, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
   _edBlocks:edBlocks, _edApply:edApplyForm, _parseStrings:parseStrings,
