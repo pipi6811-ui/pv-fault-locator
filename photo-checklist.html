@@ -135,7 +135,8 @@
   .dgm-grid{position:absolute;left:0;top:0;width:100%;height:100%;}
   .dgm-grid .cell{fill:rgba(0,0,0,0);stroke:rgba(0,90,200,.25);stroke-width:1;
     cursor:pointer;}
-  .dgm-grid .cell.on{fill:rgba(214,59,47,.45);stroke:#d63b2f;stroke-width:3;}
+  .dgm-grid .cell.on{fill:rgba(214,59,47,.18);stroke:#d63b2f;stroke-width:5;
+    stroke-linejoin:round;}
   /* ── 校正模式 ── */
   .dgm-h{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;
     border-radius:50%;background:rgba(0,120,255,.3);border:3px solid #0a64c8;
@@ -360,20 +361,6 @@
 
   <!-- ══════════ 照片 ══════════ -->
   <div id="pShots" class="page">
-    <section>
-      <div class="sec-head"><span class="num">▣</span><h2>照片</h2></div>
-      <div class="sec-body">
-        <div class="selbar" id="selBar">
-          <button class="b-sm" id="btnSelAll" type="button">全選</button>
-          <button class="b-sm" id="btnSelNone" type="button">取消選取</button>
-          <button class="b-sm" id="btnSelNotUp" type="button">選未上傳</button>
-          <span class="sp" id="selInfo">已選 0</span>
-        </div>
-        <div class="empty" id="shotsEmpty">還沒有照片。</div>
-        <div class="grid hidden" id="shotsGrid"></div>
-      </div>
-    </section>
-
     <section id="actSec" class="hidden">
       <div class="sec-head"><span class="num">↥</span><h2>處理選取的照片</h2></div>
       <div class="sec-body">
@@ -389,6 +376,20 @@
           <b>存到相簿：</b>會跳出手機的分享面板，選「儲存影像」。iPhone 一次分享太多張容易失敗，建議每次選 10 張以內。<br>
           <b>上傳 NAS：</b>需要先在設定頁填好 NAS 資訊。上傳成功的照片會標上綠色 <b>✓</b>，不會重複上傳。
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">▣</span><h2>照片</h2></div>
+      <div class="sec-body">
+        <div class="selbar" id="selBar">
+          <button class="b-sm" id="btnSelAll" type="button">全選</button>
+          <button class="b-sm" id="btnSelNone" type="button">取消選取</button>
+          <button class="b-sm" id="btnSelNotUp" type="button">選未上傳</button>
+          <span class="sp" id="selInfo">已選 0</span>
+        </div>
+        <div class="empty" id="shotsEmpty">還沒有照片。</div>
+        <div class="grid hidden" id="shotsGrid"></div>
       </div>
     </section>
   </div>
@@ -838,7 +839,8 @@ var NAS_KEY="pvshoot_nas";
    拿去訓練只會讓模型到處誤判。 */
 var OWNERS=[
   {name:"URE",
-   items:["模組","模組支架","逆變器","直流配電箱","交流配電箱","監控箱",
+   items:["模組","模組支架","線槽","管線","電纜線",
+          "逆變器","直流配電箱","交流配電箱","監控箱","日照計",
           "109躉售電表","變壓器","高壓站","破片","遮陰",
           {name:"其他",train:false}]},
 
@@ -1086,6 +1088,21 @@ function stopCam(){
    不會自己復原。沒有這段的話，回來就是畫面凍住、快門按不動。 */
 function wakeCam(){
   if(document.visibilityState==="visible"&&!camReady) startCam();
+}
+/* 全螢幕遮罩收掉之後，確認相機還在動。
+   iOS 會把被完全遮住的 <video> 暫停，遮罩拿掉並不會自己播回來——畫面就停在
+   最後一格，看起來像相機當掉，但 camReady 還是 true、快門也還能按，
+   所以既有的那套復原機制接不到。桌面 Chromium 不會這樣，只在實機上發生。
+   串流還活著就叫它繼續播；已經死掉就整個重開。 */
+function camResume(){
+  var v=$("video");
+  if(!v) return;
+  var tr=videoTrack();
+  if(!tr||tr.readyState!=="live"){ stopCam(); wakeCam(); return; }
+  if(v.paused||v.readyState<2){
+    var pr=v.play();
+    if(pr&&pr.catch) pr.catch(function(){ stopCam(); wakeCam(); });
+  }
 }
 document.addEventListener("visibilitychange",wakeCam);
 window.addEventListener("pageshow",wakeCam);
@@ -2228,7 +2245,7 @@ function askBreakLoc(){
   $("btnBrkYes").disabled=!diagramFor(S.area);
   $("brkAsk").classList.add("on");
 }
-function closeAsk(){ $("brkAsk").classList.remove("on"); }
+function closeAsk(){ $("brkAsk").classList.remove("on"); camResume(); }
 
 /* ── 串併圖檢視：拖曳、兩指縮放、點選 ── */
 var dgmImg=null, dgmK=1, dgmTx=0, dgmTy=0, dgmPt={}, dgmMark=null,
@@ -2238,7 +2255,8 @@ function dgmDraw(){
     "translate("+dgmTx+"px,"+dgmTy+"px) scale("+dgmK+")";
   // 標記反向縮放：圖放大時它不跟著變成一大坨，維持好瞄準的大小
   var m=$("brkDgmMark");
-  if(dgmMark&&dgmImg){
+  if(pick){ m.classList.remove("on"); }        // 選到的那一格自己就是標記
+  else if(dgmMark&&dgmImg){
     m.classList.add("on");
     m.style.left=(dgmMark.x*dgmImg.naturalWidth)+"px";
     m.style.top =(dgmMark.y*dgmImg.naturalHeight)+"px";
@@ -2263,8 +2281,10 @@ function fillCell(x,w,h,p){
   x.beginPath(); x.moveTo(pts[0][0],pts[0][1]);
   for(var i=1;i<4;i++) x.lineTo(pts[i][0],pts[i][1]);
   x.closePath();
-  x.fillStyle="rgba(214,59,47,.45)"; x.fill();
-  x.strokeStyle="#d63b2f"; x.lineWidth=Math.max(2,Math.min(w,h)*0.003); x.stroke();
+  x.fillStyle="rgba(214,59,47,.16)"; x.fill();
+  x.strokeStyle="#d63b2f";
+  x.lineWidth=Math.max(5,Math.min(w,h)*0.009);   // 粗一點，縮圖上也看得出來
+  x.lineJoin="round"; x.stroke();
   x.restore();
 }
 function drawMark(x,w,h,nx,ny){
@@ -2359,7 +2379,7 @@ function openDiagram(){
   };
   im.src=src;
 }
-function closeDiagram(){ $("brkDgm").classList.remove("on"); dgmPt={}; }
+function closeDiagram(){ $("brkDgm").classList.remove("on"); dgmPt={}; camResume(); }
 
 function dgmXY(e){
   var r=$("brkDgmWrap").getBoundingClientRect();
@@ -2447,8 +2467,11 @@ function confirmMark(){
   var x=cv.getContext("2d");
   x.fillStyle="#fff"; x.fillRect(0,0,cv.width,cv.height);
   x.drawImage(dgmImg,0,0,cv.width,cv.height);
+  /* 有分格就直接把那一片的框畫粗畫紅——框本身就說得出是哪一片，
+     再疊一個十字座標只是多餘，而且會擋住格子裡的編號。
+     沒有分格的案場才退回十字標記。 */
   if(pick) fillCell(x,cv.width,cv.height,pick);
-  drawMark(x,cv.width,cv.height,dgmMark.x,dgmMark.y);
+  else drawMark(x,cv.width,cv.height,dgmMark.x,dgmMark.y);
   closeDiagram();
   cv.toBlob(function(blob){
     if(!blob){ alert("定位圖存不起來，請再試一次。"); brk=null; renderBrkBar(); return; }
@@ -2468,7 +2491,7 @@ function brkFinish(){
   if(!brk){ $("brkDone").classList.remove("on"); return Promise.resolve(); }
   var b=brk;
   b.serial=$("brkSerial").value.trim();
-  $("brkDone").classList.remove("on");
+  $("brkDone").classList.remove("on"); camResume();
   /* JSON 是給之後的破片管理系統讀的：座標是相對值（0～1），
      換圖或換螢幕尺寸都還對得上，不會因為圖重畫過就失準。 */
   var data={編號:b.id,案場:b.area,工作:b.work,人員:b.who,時間:b.time,
@@ -2492,7 +2515,7 @@ function brkCancel(){
   if(!brk) return;
   var id=brk.id;
   brk=null; renderBrkBar();
-  $("brkDone").classList.remove("on");
+  $("brkDone").classList.remove("on"); camResume();
   var ids=photos.filter(function(p){ return p.brkId===id; })
                 .map(function(p){ return p.id; });
   if(!ids.length) return Promise.resolve();
@@ -3220,6 +3243,8 @@ $("btnDel").addEventListener("click",function(){
 });
 
 /* ═══════════ 分頁 ═══════════ */
+// 切回拍照頁時確認相機還在動：遮罩或分頁切換都可能讓 iOS 把它暫停
+function onTabShoot(){ if($("pShoot").classList.contains("on")) camResume(); }
 Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
   t.addEventListener("click",function(){
     Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(x){x.classList.remove("on");});
@@ -3230,11 +3255,12 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
     // 離開設定頁就結束偵測。忘了按「停止偵測」而回到拍照頁的話，
     // 遙控器的按鍵會一直被當成學習用而不拍照——很難聯想到原因。
     else if(learning) stopLearn(true);
+    onTabShoot();
   });
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18d";
+var APP_VERSION="2026-11-18e";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3497,7 +3523,7 @@ window.__pv={
   _login:synoLogin,
   _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
-  _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
+  _camResume:camResume, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
   _edBlocks:edBlocks, _edApply:edApplyForm, _parseStrings:parseStrings,
   get _edit(){ return edit; }, _loadGrids:loadGrids,
   get _grids(){ return JSON.parse(JSON.stringify(gridSaved)); },
