@@ -703,7 +703,16 @@
         </p>
         <div class="note" id="dgmState"></div>
         <div class="btnrow">
+          <button class="b1" id="btnPullDgm" type="button">從 NAS 取得串併圖</button>
           <button class="b2" id="btnEditGrid" type="button">校正模組網格</button>
+        </div>
+        <div class="note hidden" id="dgmPullState"></div>
+        <div class="note">
+          <b>新增案場的串併圖：</b>把檔案放到 NAS 的 <code>98 破片管理/_串併圖/</code>，
+          檔名就是案場名稱（例如 <code>三民國小.svg</code>），再按上面「從 NAS 取得串併圖」。
+          <b>不必改程式，同事也只要各自按一次就拿得到。</b><br>
+          格式建議用 <b>SVG</b>（向量，放大不會糊）；png／jpg 也可以，但定位要放大時會模糊。
+          抓過一次就存在手機裡，之後沒訊號照樣打得開。
         </div>
         <p class="hint">
           校正過之後，破片定位就不是點一個座標，而是<b>點到那一片</b>，
@@ -2115,16 +2124,39 @@ var DIAGRAMS={
 function dgmKey(s){
   return String(s==null?"":s).replace(/[\s\-_－—–()（）.。、,，]/g,"");
 }
-function diagramFor(area){
-  if(DIAGRAMS[area]) return DIAGRAMS[area];
+/* 從一堆名稱裡挑出跟 area 最相符的那一個。
+   完全相符最優先；都不完全相符時取「最長的那個相符的」。
+   取最長很重要：有了「三民國小」和「三民國小-風雨球場」兩個案場之後，
+   前者是後者的子字串，只看「有沒有包含」會讓風雨球場拿到另一個案場的圖。 */
+/* 只接受完全相符（正規化後）。
+   用在「會算出片號」的東西上：網格與校正範本。
+   圖抓錯一眼就看得出來，但網格抓錯是安靜地算出錯的片號——
+   「三民國小-風雨球場」套用「三民國小」的 15×7，每一片編號都是錯的，
+   而且沒有任何跡象。寧可讓它從空白開始，也不要給錯的。 */
+function exactKey(keys,area){
   var a=dgmKey(area);
   if(!a) return null;
-  var ks=Object.keys(DIAGRAMS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return DIAGRAMS[ks[i]];
-  }
+  for(var i=0;i<keys.length;i++) if(dgmKey(keys[i])===a) return keys[i];
   return null;
+}
+function bestKey(keys,area){
+  var a=dgmKey(area);
+  if(!a) return null;
+  var loose=null, llen=-1;
+  for(var i=0;i<keys.length;i++){
+    var k=dgmKey(keys[i]);
+    if(!k) continue;
+    if(k===a) return keys[i];
+    if((a.indexOf(k)>=0||k.indexOf(a)>=0)&&k.length>llen){ loose=keys[i]; llen=k.length; }
+  }
+  return loose;
+}
+function diagramFor(area){
+  // 從 NAS 抓下來的優先：那是現場自己維護的版本，比程式內建的新
+  var ck=bestKey(Object.keys(dgmCache),area);
+  if(ck&&dgmCache[ck]&&dgmCache[ck].uri) return dgmCache[ck].uri;
+  var dk=bestKey(Object.keys(DIAGRAMS),area);
+  return dk?DIAGRAMS[dk]:null;
 }
 
 /* ── 模組網格 ──
@@ -2158,26 +2190,100 @@ var SEEDS={
               {name:"PV 2-6",n:16}]}
   ]}
 };
-function seedFor(area){
-  if(SEEDS[area]) return SEEDS[area];
-  var a=dgmKey(area), ks=Object.keys(SEEDS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return SEEDS[ks[i]];
+/* 串併圖放在 NAS，App 抓下來存在手機裡。
+   這樣新增案場、換圖都不必改程式，而且所有同事自動拿到同一份；
+   抓過一次之後存在 IndexedDB，屋頂上沒訊號照樣打得開。
+   底線開頭是刻意的：破片管理系統掃資料夾時要跳過它，那不是一筆破片紀錄。 */
+var DGM_DIR=BREAK_ROOT+"/_串併圖";
+var dgmCache={};           // 從 NAS 抓下來的，key 是正規化後的案場名
+function loadDiagramCache(){
+  return kvGet("dgmCache").then(function(v){ dgmCache=v||{}; }).catch(function(){});
+}
+function saveDiagramCache(){ return kvSet("dgmCache",dgmCache); }
+
+function listDiagrams(sid){
+  return apiVers(sid).then(function(v){
+    return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.List&version="+v.list+
+      "&method=list&folder_path="+encodeURIComponent(DGM_DIR)+
+      "&_sid="+encodeURIComponent(sid)));
+  }).then(function(r){ return r.json(); })
+    .then(function(j){
+      if(!j.success) return [];     // 資料夾還不存在＝還沒放圖，不是錯誤
+      return ((j.data&&j.data.files)||[]).filter(function(f){
+        return !f.isdir&&/\.(svg|png|jpe?g)$/i.test(f.name||"");
+      });
+    }).catch(function(){ return []; });
+}
+// 檔名（去掉副檔名）就是案場名，比對跟串併圖一樣寬鬆
+function dgmFileMatches(name,area,allNames){
+  var base=String(name||"").replace(/\.(svg|png|jpe?g)$/i,"");
+  // 有候選清單就挑最相符的那一個：「三民國小」是「三民國小-風雨球場」的
+  // 子字串，只看包含關係會兩個都算中
+  if(allNames&&allNames.length){
+    var bases=allNames.map(function(n){
+      return String(n||"").replace(/\.(svg|png|jpe?g)$/i,""); });
+    return bestKey(bases,area)===base;
   }
-  return null;
+  var a=dgmKey(area), b=dgmKey(base);
+  return !!(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0));
+}
+function blobToDataURI(blob){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){ res(fr.result); };
+    fr.onerror=function(){ rej(new Error("圖片讀不出來")); };
+    fr.readAsDataURL(blob);
+  });
+}
+/* 把 NAS 上的串併圖抓下來。帶 area 就只抓那一個案場，不帶就全部抓。 */
+function pullDiagrams(area,onNote){
+  var say=onNote||function(){};
+  var got=0, names=[];
+  say("登入 NAS…");
+  return synoLogin().then(function(sid){
+    say("查看 "+DGM_DIR+" …");
+    return listDiagrams(sid).then(function(files){
+      if(!files.length) throw new Error("NAS 上的 "+DGM_DIR+" 裡沒有圖片檔（svg／png／jpg）");
+      var all=files.map(function(f){ return f.name; });
+      var want=area?files.filter(function(f){ return dgmFileMatches(f.name,area,all); }):files;
+      if(!want.length)
+        throw new Error("找不到「"+area+"」的串併圖。NAS 上現有："+
+          files.map(function(f){return f.name;}).join("、"));
+      return want.reduce(function(c,f){
+        return c.then(function(){
+          say("下載 "+f.name+" …");
+          return apiVers(sid).then(function(v){
+            return fetch(apiUrl("entry.cgi","api=SYNO.FileStation.Download&version="+v.down+
+              "&method=download&mode=download&path="+encodeURIComponent(f.path||(DGM_DIR+"/"+f.name))+
+              "&_sid="+encodeURIComponent(sid)));
+          }).then(function(r){
+            if(!r.ok) throw new Error(f.name+"：HTTP "+r.status);
+            return r.blob();
+          }).then(blobToDataURI).then(function(uri){
+            var base=f.name.replace(/\.(svg|png|jpe?g)$/i,"");
+            dgmCache[dgmKey(base)]={uri:uri,name:f.name,at:new Date().toISOString()};
+            got++; names.push(f.name);
+          });
+        });
+      },Promise.resolve());
+    }).then(function(){ return synoLogout(sid); });
+  }).then(saveDiagramCache)
+    .then(function(){ return {n:got,names:names}; });
+}
+
+function seedFor(area){
+  // 校正範本同理：給錯的行列數，校正出來的每一片都是錯的
+  var k=exactKey(Object.keys(SEEDS),area);
+  return k?SEEDS[k]:null;
 }
 function gridFor(area){
   // 現場自己校正過的優先，其次才是程式內建的
+  // 自己校正存下來的：key 本來就是正規化後的名稱，等同完全相符
   var mine=gridSaved[gridKey(area)];
   if(mine&&mine.blocks&&mine.blocks.length) return mine;
-  if(PANELS[area]) return PANELS[area];
-  var a=dgmKey(area), ks=Object.keys(PANELS);
-  for(var i=0;i<ks.length;i++){
-    var k=dgmKey(ks[i]);
-    if(k&&(a.indexOf(k)>=0||k.indexOf(a)>=0)) return PANELS[ks[i]];
-  }
-  return null;
+  // 網格會算出片號，所以只認完全相符（見 exactKey）
+  var k=exactKey(Object.keys(PANELS),area);
+  return k?PANELS[k]:null;
 }
 // 四邊形內的雙線性插值：(u,v) 都是 0～1，回傳相對座標
 function quadAt(q,u,v){
@@ -2711,6 +2817,22 @@ $("edDel").addEventListener("click",function(){
 $("btnDgmSave").addEventListener("click",function(){ closeEditor(true); });
 $("btnDgmCalib").addEventListener("click",function(){ closeDiagram(); openEditor(); });
 $("btnEditGrid").addEventListener("click",openEditor);
+$("btnPullDgm").addEventListener("click",function(){
+  if(!NAS.user||!NAS.pass){
+    setNote($("dgmPullState"),"<b>請先到第 4 區填好 NAS 帳號密碼。</b>","warn");
+    return;
+  }
+  var btn=$("btnPullDgm"); btn.disabled=true;
+  var say=function(t){ setNote($("dgmPullState"),t); };
+  // 不帶案場＝把 NAS 上的全部抓下來，一次就讓所有案場都能用
+  pullDiagrams(null,say).then(function(r){
+    setNote($("dgmPullState"),
+      "<b>取得 "+r.n+" 張串併圖 ✓</b><br>"+esc(r.names.join("、")),"ok");
+    renderDgmState();
+  }).catch(function(err){
+    setNote($("dgmPullState"),"<b>取得失敗：</b>"+errHtml(err),"bad");
+  }).then(function(){ btn.disabled=false; });
+});
 
 $("btnBrkYes").addEventListener("click",openDiagram);
 $("btnBrkNo").addEventListener("click",closeAsk);
@@ -3095,7 +3217,8 @@ $("sBreakLoc").addEventListener("change",function(){
 });
 // 哪些案場有圖、目前這個有沒有——現場最想知道的就這兩件事
 function renderDgmState(){
-  var have=Object.keys(DIAGRAMS);
+  var have=Object.keys(DIAGRAMS).concat(
+    Object.keys(dgmCache).map(function(k){ return dgmCache[k].name||k; }));
   var mine=!!diagramFor(S.area);
   var body="<b>目前案場：</b>"+esc(S.area||"未設定")+
     (mine?" —— 有串併圖 ✓":" —— <b>沒有串併圖，無法定位</b>");
@@ -3306,7 +3429,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18f";
+var APP_VERSION="2026-11-18h";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3541,7 +3664,7 @@ window.addEventListener("pagehide",stopCam);
 fillForms();
 renderNow(); renderItemBtns();
 refreshPhotos();
-loadGrids().then(renderDgmState);
+Promise.all([loadGrids(),loadDiagramCache()]).then(renderDgmState);
 initPersist();
 initSW();
 startCam();
@@ -3569,7 +3692,11 @@ window.__pv={
   _login:synoLogin,
   _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
-  _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
+  _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor,
+  _pullDgm:pullDiagrams, _dgmDir:DGM_DIR, _dgmMatch:dgmFileMatches,
+  _bestKey:bestKey, _exactKey:exactKey, _dgmKey:dgmKey,
+  get _dgmCache(){ return JSON.parse(JSON.stringify(dgmCache)); },
+  _loadDgmCache:loadDiagramCache, _openEditor:openEditor, _closeEditor:closeEditor, _edCur:edCur,
   _edBlocks:edBlocks, _edApply:edApplyForm, _parseStrings:parseStrings,
   get _edit(){ return edit; }, _loadGrids:loadGrids,
   get _grids(){ return JSON.parse(JSON.stringify(gridSaved)); },
