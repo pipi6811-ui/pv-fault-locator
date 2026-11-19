@@ -2175,6 +2175,14 @@ function diagramFor(area){ var p=diagramPick(area); return p?p.uri:null; }
 /* 借來的圖上「不能套範本」，但自己拖出來的網格可以。
    差別在範本的四個角是照那個案場自己的圖量的，疊到別張圖上必錯；
    自己拖的是對著眼前這張圖拖的，本來就一致。 */
+/* 名字差一點點，範本就默默不見。
+   範本只認完全相符（名字錯了每一片的片號都會錯），但使用者不會知道
+   「高雄三民國小-風雨球場」和「三民國小-風雨球場」在程式眼裡是兩個案場。
+   找得到很接近的名字就講出來，並且告訴他要改成哪一個。 */
+function nearSeed(area){
+  if(!area||seedFor(area)) return null;
+  return bestKey(Object.keys(SEEDS),area)||null;
+}
 function seedBlocked(area){
   var dp=diagramPick(area);
   if(!dp||dp.exact) return null;
@@ -2271,7 +2279,17 @@ var SEEDS={
 var DGM_DIR=BREAK_ROOT+"/_串併圖";
 var dgmCache={};           // 從 NAS 抓下來的，key 是正規化後的案場名
 function loadDiagramCache(){
-  return kvGet("dgmCache").then(function(v){ dgmCache=v||{}; }).catch(function(){});
+  return kvGet("dgmCache").then(function(v){
+    dgmCache=v||{};
+    // 舊版本存進來的壞 data URI，開啟時順手修掉並寫回去
+    var fixed=false;
+    Object.keys(dgmCache).forEach(function(k){
+      var before=dgmCache[k]&&dgmCache[k].uri;
+      fixDgmUri(dgmCache[k]);
+      if(dgmCache[k]&&dgmCache[k].uri!==before) fixed=true;
+    });
+    if(fixed) return saveDiagramCache();
+  }).catch(function(){});
 }
 function saveDiagramCache(){ return kvSet("dgmCache",dgmCache); }
 
@@ -2301,13 +2319,36 @@ function dgmFileMatches(name,area,allNames){
   var a=dgmKey(area), b=dgmKey(base);
   return !!(a&&b&&(a.indexOf(b)>=0||b.indexOf(a)>=0));
 }
-function blobToDataURI(blob){
+var IMG_MIME={svg:"image/svg+xml",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg"};
+function mimeOf(name){
+  var m=/\.([a-z0-9]+)$/i.exec(String(name||""));
+  return (m&&IMG_MIME[m[1].toLowerCase()])||"";
+}
+/* 型別要照副檔名，不能信 NAS 給的 Content-Type。
+   DSM 下載 API 常常回 application/octet-stream，readAsDataURL 會照抄，
+   變成 data:application/octet-stream;base64,... —— <img> 不認這種，
+   圖就「讀不出來」。偏偏抓取那一步還是回報成功，所以很難查。
+   檔名是我們自己放上去的，副檔名可靠。 */
+function blobToDataURI(blob,name){
+  var mt=mimeOf(name);
+  if(mt&&blob.type!==mt){ try{ blob=blob.slice(0,blob.size,mt); }catch(e){} }
   return new Promise(function(res,rej){
     var fr=new FileReader();
     fr.onload=function(){ res(fr.result); };
     fr.onerror=function(){ rej(new Error("圖片讀不出來")); };
     fr.readAsDataURL(blob);
   });
+}
+/* 之前的版本已經在手機裡存下壞掉的 data URI。改前綴就能救，
+   不必要求使用者重抓一次（屋頂上不見得連得到 NAS）。 */
+function fixDgmUri(e){
+  if(!e||typeof e.uri!=="string"||e.uri.indexOf("data:")!==0) return e;
+  var c=e.uri.indexOf(","); if(c<0) return e;
+  var head=e.uri.slice(5,c);
+  if(head.indexOf("image/")===0) return e;
+  var mt=mimeOf(e.name); if(!mt) return e;
+  e.uri="data:"+mt+(/;base64$/.test(head)?";base64":"")+","+e.uri.slice(c+1);
+  return e;
 }
 /* 把 NAS 上的串併圖抓下來。帶 area 就只抓那一個案場，不帶就全部抓。 */
 function pullDiagrams(area,onNote){
@@ -2333,7 +2374,7 @@ function pullDiagrams(area,onNote){
           }).then(function(r){
             if(!r.ok) throw new Error(f.name+"：HTTP "+r.status);
             return r.blob();
-          }).then(blobToDataURI).then(function(uri){
+          }).then(function(b){ return blobToDataURI(b,f.name); }).then(function(uri){
             var base=f.name.replace(/\.(svg|png|jpe?g)$/i,"");
             dgmCache[dgmKey(base)]={uri:uri,name:f.name,at:new Date().toISOString()};
             got++; names.push(f.name);
@@ -2598,7 +2639,9 @@ function openDiagram(){
     if(edit){ edSyncForm(); edHandles(); } };
   im.onerror=function(){
     closeDiagram();
-    alert("串併圖讀不出來，這次先用一般方式拍照。");
+    alert("「"+(dp.name||S.area)+"」這張串併圖讀不出來，這次先用一般方式拍照。\n\n"+
+      "到設定頁第 11 區按一次「從 NAS 取得串併圖」重抓看看；\n"+
+      "還是不行的話，多半是 NAS 上那個檔案本身有問題（不是真的 svg／png／jpg）。");
   };
   im.src=dp.uri;
 }
@@ -2862,7 +2905,14 @@ function openEditor(){
     if(seed){
       // 深拷貝：範本是共用的，不能讓編輯動到它
       gridSaved[gridKey(S.area)].blocks=JSON.parse(JSON.stringify(seed.blocks));
-    }else edBlocks().push(edNewBlock());
+    }else{
+      // 名字差一點就拿不到範本，而畫面只會給一塊空白——先講清楚
+      var near=nearSeed(S.area);
+      if(near) alert("「"+S.area+"」沒有內建範本，所以從空白開始。\n\n"+
+        "但「"+near+"」是有範本的。網格只認完全一樣的名稱\n"+
+        "（名字對錯決定片號對錯），把維運區域改成\n"+near+"\n就會帶出來。");
+      edBlocks().push(edNewBlock());
+    }
   }
   openDiagram();
   $("dgmEdit").classList.remove("hidden");
@@ -3334,10 +3384,16 @@ function renderDgmState(){
       ss+=(b.strings||[]).reduce(function(a,x){return a+x.n;},0); });
     body+="<br><b>模組網格：</b>"+g.blocks.length+" 個區塊、共 "+tot+" 片"+
       (ss?("，已分串 "+ss+" 片"):"，還沒填各串片數");
-  }else body+="<br><b>模組網格：</b>還沒校正——所以破片定位目前是<b>點大概位置</b>，"+
+  }else{
+    body+="<br><b>模組網格：</b>還沒校正——所以破片定位目前是<b>點大概位置</b>，"+
       "點下去不會有紅框，資料也不會記片號。"+
       (seedFor(S.area)?"按下面「校正模組網格」會先帶出這個案場的行列數與各串，"+
         "你只要把四個角拖到對齊就好。":"");
+    var near=nearSeed(S.area);
+    if(near) body+="<br><b>有一個很接近的名字「"+esc(near)+"」是有範本的。</b>"+
+      "網格只認<b>完全一樣</b>的名稱（名字對錯決定片號對錯，所以這裡不做模糊比對）——"+
+      "把上面的維運區域改成「"+esc(near)+"」就會帶出來。";
+  }
   setNote($("dgmState"),body,mine?"ok":"warn");
 }
 $("sSnd").addEventListener("change",function(){
@@ -3533,7 +3589,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-19a";
+var APP_VERSION="2026-11-19b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3794,7 +3850,7 @@ window.__pv={
   get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin,
-  _diagrams:DIAGRAMS, _diagramFor:diagramFor, _diagramPick:diagramPick, _seedBlocked:seedBlocked, _redrawDgm:dgmDraw,
+  _diagrams:DIAGRAMS, _diagramFor:diagramFor, _diagramPick:diagramPick, _seedBlocked:seedBlocked, _nearSeed:nearSeed, _mimeOf:mimeOf, _fixDgmUri:fixDgmUri, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
   _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor,
   _pullDgm:pullDiagrams, _dgmDir:DGM_DIR, _dgmMatch:dgmFileMatches,
