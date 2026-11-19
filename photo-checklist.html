@@ -2151,12 +2151,37 @@ function bestKey(keys,area){
   }
   return loose;
 }
-function diagramFor(area){
+/* 挑這個案場的串併圖，並且說清楚是不是「剛好同名」的那一張。
+
+   名稱寬鬆比對是為了讓「高雄三民國小」對得上 NAS 上的「三民國小.svg」。
+   但兩個案場名互為子字串時（三民國小 ⊂ 三民國小-風雨球場），只要短的那張在、
+   長的那張還沒放上去，就會安靜地借到別的案場的圖。
+   借可以，不講不行——尤其不能在借來的圖上畫網格：那會把這個案場的片號
+   標在另一個案場的圖上，看起來還很像對的。 */
+function diagramPick(area){
+  var r=null;
   // 從 NAS 抓下來的優先：那是現場自己維護的版本，比程式內建的新
   var ck=bestKey(Object.keys(dgmCache),area);
-  if(ck&&dgmCache[ck]&&dgmCache[ck].uri) return dgmCache[ck].uri;
-  var dk=bestKey(Object.keys(DIAGRAMS),area);
-  return dk?DIAGRAMS[dk]:null;
+  if(ck&&dgmCache[ck]&&dgmCache[ck].uri)
+    r={uri:dgmCache[ck].uri,key:ck,name:dgmCache[ck].name||ck};
+  else{
+    var dk=bestKey(Object.keys(DIAGRAMS),area);
+    if(dk) r={uri:DIAGRAMS[dk],key:dk,name:dk};
+  }
+  if(r) r.exact=(dgmKey(r.key)===dgmKey(area));
+  return r;
+}
+function diagramFor(area){ var p=diagramPick(area); return p?p.uri:null; }
+/* 借來的圖上「不能套範本」，但自己拖出來的網格可以。
+   差別在範本的四個角是照那個案場自己的圖量的，疊到別張圖上必錯；
+   自己拖的是對著眼前這張圖拖的，本來就一致。 */
+function seedBlocked(area){
+  var dp=diagramPick(area);
+  if(!dp||dp.exact) return null;
+  if(!seedFor(area)) return null;
+  var mine=gridSaved[gridKey(area)];
+  if(mine&&mine.blocks&&mine.blocks.length) return null;
+  return dp;
 }
 
 /* ── 模組網格 ──
@@ -2548,19 +2573,26 @@ function selectCell(el){
 }
 
 function openDiagram(){
-  var src=diagramFor(S.area);
-  if(!src) return;
+  var dp=diagramPick(S.area);
+  if(!dp) return;
   closeAsk();
   dgmMark=null; pick=null; $("btnDgmOk").disabled=true;
   var hasGrid=!!gridFor(S.area);
-  $("brkDgmTip").innerHTML=hasGrid
+  var blk=seedBlocked(S.area);
+  if(blk)
+    $("brkDgmTip").innerHTML="<b>這張是「"+esc(blk.name)+"」的串併圖</b>，"+
+      "不是「"+esc(S.area)+"」的——NAS 上還沒有這個案場的圖。"+
+      "所以只能點大概位置，不會有紅框。";
+  else $("brkDgmTip").innerHTML=hasGrid
     ? "點破片的那一片模組。<b>兩指可以放大</b>，點錯再點一次就好。"
-    : "<b>這個案場還沒校正模組網格</b>，所以只能點大概位置（不會有紅框）。"+
+    : (dp.exact?"":"<b>目前用的是「"+esc(dp.name)+"」那張圖。</b>")+
+      "<b>這個案場還沒校正模組網格</b>，所以只能點大概位置（不會有紅框）。"+
       "要點到特定那一片，按下面的「去校正」。";
-  // 沒校正過的話，直接給一條路過去，不要讓人卡在這裡猜
-  $("btnDgmCalib").classList.toggle("hidden",hasGrid);
+  // 沒校正過的話，直接給一條路過去，不要讓人卡在這裡猜；
+  // 但範本被擋住時不給——套上去就是把片號標在別的案場的圖上
+  $("btnDgmCalib").classList.toggle("hidden",hasGrid||!!blk);
   $("brkDgm").classList.add("on");
-  $("brkDgmImg").src=src;
+  $("brkDgmImg").src=dp.uri;
   var im=new Image();
   im.onload=function(){ dgmImg=im; dgmFit(); renderPanelGrid();
     if(edit){ edSyncForm(); edHandles(); } };
@@ -2568,7 +2600,7 @@ function openDiagram(){
     closeDiagram();
     alert("串併圖讀不出來，這次先用一般方式拍照。");
   };
-  im.src=src;
+  im.src=dp.uri;
 }
 function closeDiagram(){ $("brkDgm").classList.remove("on"); dgmPt={}; camResume(); }
 
@@ -2811,8 +2843,17 @@ function edHandles(){
   });
 }
 function openEditor(){
-  if(!diagramFor(S.area)){
+  var dp=diagramPick(S.area);
+  if(!dp){
     alert("這個案場還沒有串併圖，沒辦法校正網格。");
+    return;
+  }
+  var blk=seedBlocked(S.area);
+  if(blk){
+    // 範本的四個角是照那個案場自己的圖量的，套到別張圖上片號全錯
+    alert("現在顯示的是「"+blk.name+"」的串併圖，不是「"+S.area+"」的。\n\n"+
+      "請先把這個案場的圖放到 NAS 的\n"+DGM_DIR+"\n（檔名就用案場名稱），"+
+      "再按「從 NAS 取得串併圖」。");
     return;
   }
   edit=true; edIdx=0;
@@ -3271,10 +3312,21 @@ $("sBreakLoc").addEventListener("change",function(){
 function renderDgmState(){
   var have=Object.keys(DIAGRAMS).concat(
     Object.keys(dgmCache).map(function(k){ return dgmCache[k].name||k; }));
-  var mine=!!diagramFor(S.area);
+  var dp=diagramPick(S.area);
+  var mine=!!(dp&&dp.exact);
+  var blk=seedBlocked(S.area);
   var body="<b>目前案場：</b>"+esc(S.area||"未設定")+
-    (mine?" —— 有串併圖 ✓":" —— <b>沒有串併圖，無法定位</b>");
+    (!dp ? " —— <b>沒有串併圖，無法定位</b>"
+         : dp.exact ? " —— 有串併圖 ✓"
+         : " —— <b>用的是「"+esc(dp.name)+"」那張圖</b>（檔名跟案場名不一樣）");
   body+="<br><b>已經有圖的案場：</b>"+(have.length?esc(have.join("、")):"還沒有任何案場");
+  if(blk){
+    setNote($("dgmState"),body+"<br><b>這不是「"+esc(S.area)+"」自己的圖，"+
+      "所以不能套用內建的網格範本</b>——範本的四個角是照這個案場的圖量的，"+
+      "疊在別張圖上片號會是錯的。<br>把「"+esc(S.area)+"」的圖放到 NAS 的 "+
+      esc(DGM_DIR)+"（檔名就用案場名稱），再按下面「從 NAS 取得串併圖」。","warn");
+    return;
+  }
   var g=gridFor(S.area);
   if(g&&g.blocks&&g.blocks.length){
     var tot=0, ss=0;
@@ -3481,7 +3533,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-18i";
+var APP_VERSION="2026-11-19a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3742,7 +3794,7 @@ window.__pv={
   get items(){ return curItems(); }, _owners:OWNERS, _fill:fillForms,
   _keyOf:keyOf, _displayOf:displayOf, _trainable:trainableItem, _allItems:allItems,
   _login:synoLogin,
-  _diagrams:DIAGRAMS, _diagramFor:diagramFor, _redrawDgm:dgmDraw,
+  _diagrams:DIAGRAMS, _diagramFor:diagramFor, _diagramPick:diagramPick, _seedBlocked:seedBlocked, _redrawDgm:dgmDraw,
   _panels:PANELS, _setPanels:function(a,g){ PANELS[a]=g; },
   _camResume:camResume, _seeds:SEEDS, _seedFor:seedFor,
   _pullDgm:pullDiagrams, _dgmDir:DGM_DIR, _dgmMatch:dgmFileMatches,
