@@ -155,6 +155,25 @@
   .dgm-edit input.num{max-width:76px;flex:0 0 auto;text-align:center;}
   .dgm-edit .hint2{font-size:11.5px;color:#bbb;line-height:1.5;margin:0 0 8px;}
   .dgm-edit .warn2{color:var(--hazard);font-weight:700;}
+  /* ── 電腦上的寬版面 ──
+     描圖是辦公室的工作，螢幕夠寬時把設定面板移到右邊，圖就能用整個高度。
+     手機直式（390px）拉框很擠，而拉框正是描圖花最多時間的動作。
+     只在校正模式套用：現場點破片時全螢幕看圖才對。 */
+  @media (min-width:900px){
+    .dgm.wide{display:grid;grid-template-columns:1fr 400px;
+      grid-template-rows:auto 1fr auto;
+      grid-template-areas:"top side" "wrap side" "wrap bar";}
+    .dgm.wide .dgm-top{grid-area:top;}
+    .dgm.wide .dgm-wrap{grid-area:wrap;}
+    .dgm.wide .dgm-edit{grid-area:side;max-height:none;overflow:auto;
+      border-left:2px solid #333;padding:16px;}
+    .dgm.wide .dgm-bar{grid-area:bar;border-left:2px solid #333;}
+    .dgm.wide .dgm-edit .hint2{font-size:13px;}
+    .dgm.wide .dgm-edit label{font-size:13.5px;}
+    .dgm.wide .dgm-edit input.num{max-width:92px;font-size:16px;}
+    /* 滑鼠比手指準，把手可以小一點，才不會擋住要對齊的格子 */
+    .dgm.wide .dgm-h{width:28px;height:28px;margin:-14px 0 0 -14px;}
+  }
   .dgm-mark{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;
     pointer-events:none;display:none;}
   .dgm-mark.on{display:block;}
@@ -314,6 +333,7 @@
     <button class="tab on" data-p="pShoot" type="button">拍照</button>
     <button class="tab" data-p="pShots" type="button">照片 <span class="badge" id="tabCount">0</span></button>
     <button class="tab" data-p="pSet" type="button">設定</button>
+    <button class="tab" data-p="pTrace" type="button">描圖</button>
   </div>
 
   <!-- ══════════ 拍照 ══════════ -->
@@ -729,6 +749,62 @@
           代價是<b>新案場要先把圖加進程式</b>，沒有圖的案場只會提示沒辦法定位，
           不影響平常拍照。
         </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════ 描圖 ══════════
+       辦公室用：把案場的底圖（空拍照或串併圖）當描圖紙，拉框、填行列數、
+       挖掉沒有板子的格子，存成現場人員用的網格。
+       只有對 NAS 的 _串併圖 有寫入權的帳號能進來——判定方式是真的去寫一個
+       檔案再刪掉，不是比對名單，這樣前端跟 NAS 的權限不會有落差。 -->
+  <div id="pTrace" class="page">
+    <section>
+      <h2><span class="n">1</span>誰可以描圖</h2>
+      <div class="note" id="trcPerm">按下面「檢查寫入權限」。</div>
+      <div class="btnrow">
+        <button class="b1" id="btnTrcCheck" type="button">檢查寫入權限</button>
+      </div>
+      <p class="hint">
+        判定方式：用設定頁第 4 區的 NAS 帳號，往 <code>_串併圖</code> 寫一個
+        <code>_probe_…</code> 檔再刪掉。寫得進去就是有權限。
+      </p>
+      <div class="note warn">
+        <b>這一層只擋畫面。</b>懂技術的人還是繞得過去。
+        真正的強制在 NAS：請在 DSM 把 <code>_串併圖</code> 設成只有描圖的帳號可寫、
+        其他人唯讀。
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="n">2</span>挑案場</h2>
+      <div class="row">
+        <label>案場</label>
+        <select id="trcArea"></select>
+      </div>
+      <div class="note" id="trcState">—</div>
+      <div class="btnrow">
+        <button class="b1" id="btnTrcOpen" type="button" disabled>開始描圖</button>
+        <button class="b2" id="btnTrcPull" type="button">從 NAS 取得底圖</button>
+      </div>
+      <p class="hint">
+        底圖放 NAS 的 <code>98 破片管理/_串併圖/</code>，檔名就是案場名稱。
+        沒有廠商串併圖的案場，<b>直接放空拍照</b>就好 —— 描圖台是拿它當描圖紙。
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="n">3</span>怎麼描</h2>
+      <div class="note">
+        <b>一塊一塊來：</b>按「新增」開一個區塊 → 拖四個藍點圈住這一塊 →
+        填幾列幾行 → 對齊了再開下一塊。<br>
+        <b>屋頂不是完整矩形時：</b>框大一點蓋住整片，再勾「挖空模式」，
+        點掉沒有板子的格子。<br>
+        <b>要編片號才填「各串」</b>；只要點得到位置的案場留空就好。
+      </div>
+      <div class="note warn" id="trcScope">
+        <b>目前存在這台裝置裡。</b>還沒有「發佈到 NAS」，所以描好的網格
+        不會自動給其他同事 —— 那是下一步要做的。
       </div>
     </section>
   </div>
@@ -3027,6 +3103,8 @@ function openEditor(){
   $("btnDgmSave").classList.remove("hidden");
   // 每次進來都從「拖角」開始，免得上次關掉時還停在挖空模式，一點就挖洞
   $("edHole").checked=false;
+  // 寬版面只在校正模式開；現場點破片時要全螢幕看圖
+  $("brkDgm").classList.add("wide");
   $("brkDgmTip").innerHTML="<b>校正模式</b>　拖藍點圈出一塊，下面填幾列幾行。";
 }
 function closeEditor(save){
@@ -3042,10 +3120,11 @@ function closeEditor(save){
      下次開圖選片時，點到區塊四個角那幾片會被把手吃掉，什麼都沒反應。 */
   edHandles();
   $("dgmEdit").classList.add("hidden");
+  $("brkDgm").classList.remove("wide");
   $("btnDgmOk").classList.remove("hidden");
   $("btnDgmSave").classList.add("hidden");
   closeDiagram();
-  renderDgmState();
+  renderDgmState(); renderTrace();
 }
 ["edRows","edCols","edMajor","edSnake","edStrings"].forEach(function(id){
   $(id).addEventListener("change",edApplyForm);
@@ -3080,6 +3159,75 @@ $("edDel").addEventListener("click",function(){
 $("btnDgmSave").addEventListener("click",function(){ closeEditor(true); });
 $("btnDgmCalib").addEventListener("click",function(){ closeDiagram(); openEditor(); });
 $("btnEditGrid").addEventListener("click",openEditor);
+
+/* ═══════════ 描圖台 ═══════════ */
+var trcOk=false;   // 這台裝置這次有沒有通過寫入權檢查
+function trcAreas(){
+  // 有底圖的案場才描得了；NAS 抓下來的與程式內建的都算
+  var a={};
+  Object.keys(DIAGRAMS).forEach(function(k){ a[k]=1; });
+  Object.keys(dgmCache).forEach(function(k){ a[dgmCache[k].name||k]=1; });
+  Object.keys(a).forEach(function(k){ a[k.replace(/\.[a-z0-9]+$/i,"")]=1; });
+  return Object.keys(a).filter(function(k){ return !/\.[a-z0-9]+$/i.test(k); }).sort();
+}
+function renderTrace(){
+  var sel=$("trcArea"), keep=sel.value;
+  var list=trcAreas();
+  sel.innerHTML="";
+  if(!list.length){
+    var o=document.createElement("option");
+    o.value=""; o.textContent="（還沒有任何底圖）";
+    sel.appendChild(o);
+  }
+  list.forEach(function(k){
+    var o=document.createElement("option");
+    o.value=k; o.textContent=k;
+    if(k===keep||(!keep&&k===S.area)) o.selected=true;
+    sel.appendChild(o);
+  });
+  var area=sel.value;
+  var g=area?gridFor(area):null;
+  var body;
+  if(!area) body="<b>還沒有底圖。</b>先把圖放到 NAS 的 "+esc(DGM_DIR)+
+    "（檔名就是案場名稱），再按「從 NAS 取得底圖」。";
+  else if(g&&g.blocks&&g.blocks.length){
+    var tot=0,holes=0;
+    g.blocks.forEach(function(b){ tot+=blockCells(b); holes+=(b.skip||[]).length; });
+    body="<b>"+esc(area)+"</b> 已經描過："+g.blocks.length+" 個區塊、共 "+tot+" 片"+
+      (holes?("（挖掉 "+holes+" 格）"):"")+"。再描一次會從現有的接著改。";
+  }else body="<b>"+esc(area)+"</b> 還沒描過 —— 進去會從一個空白區塊開始。";
+  setNote($("trcState"),body,g&&g.blocks&&g.blocks.length?"ok":"");
+  $("btnTrcOpen").disabled=!trcOk||!area;
+}
+function trcSetPerm(html,kind){ setNote($("trcPerm"),html,kind||""); }
+$("btnTrcCheck").addEventListener("click",function(){
+  var btn=$("btnTrcCheck"); btn.disabled=true;
+  trcSetPerm("檢查中 —— 正在往 "+esc(DGM_DIR)+" 寫一個測試檔…");
+  nasProbeWrite().then(function(r){
+    btn.disabled=false;
+    if(r.ok){
+      trcOk=true;
+      trcSetPerm("<b>可以描圖。</b>帳號「"+esc(NAS.user)+"」對 "+esc(DGM_DIR)+
+        " 有寫入權。"+(r.leftover?"<br><b>注意：</b>測試檔 "+esc(r.leftover.leftover)+
+        " 刪不掉（"+esc(r.leftover.why)+"），請手動清掉。":""),"ok");
+    }else{
+      trcOk=false;
+      trcSetPerm("<b>不能描圖。</b>帳號「"+esc(NAS.user||"（未填）")+
+        "」寫不進 "+esc(DGM_DIR)+"。<br>原因："+esc(r.err)+
+        "<br>描圖是辦公室的工作，現場拍照與破片定位不受影響。","warn");
+    }
+    renderTrace();
+  });
+});
+$("trcArea").addEventListener("change",renderTrace);
+$("btnTrcOpen").addEventListener("click",function(){
+  var area=$("trcArea").value;
+  if(!trcOk||!area) return;
+  // 描圖台是改「這個案場」的網格，所以要先把目前案場切過去
+  S.area=area; writeJSON(SET_KEY,S); fillForms();
+  openEditor();
+});
+$("btnTrcPull").addEventListener("click",function(){ $("btnPullDgm").click(); });
 $("btnPullDgm").addEventListener("click",function(){
   if(!NAS.user||!NAS.pass){
     setNote($("dgmPullState"),"<b>請先到第 4 區填好 NAS 帳號密碼。</b>","warn");
@@ -3261,6 +3409,55 @@ function synoUpload(sid,p){
       if(!j.success) throw new Error(synoErr(j.error&&j.error.code,"fs"));
       return true;
     });
+}
+function synoDelete(sid,path){
+  var body=new URLSearchParams({api:"SYNO.FileStation.Delete",version:"2",
+    method:"delete",path:path,_sid:sid});
+  return fetch(apiUrl("entry.cgi","_sid="+encodeURIComponent(sid)),
+      {method:"POST",body:body})
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    })
+    .then(function(j){
+      if(!j.success) throw new Error(synoErr(j.error&&j.error.code,"fs"));
+      return true;
+    });
+}
+/* 描圖的權限：真的去寫一個檔案再刪掉，不是比對帳號名單。
+   名單會跟 NAS 的實際權限脫節（有人調了資料夾權限卻忘了改名單），
+   試寫不會——寫得進去就是真的有權限。
+
+   檔名用一次性的（時間＋亂數）：不會覆蓋到別人正在用的東西，
+   萬一刪除失敗也看得出是哪一次檢查留下來的。 */
+function nasProbeWrite(){
+  /* 一律 resolve，不要 reject：呼叫端只接 .then，reject 會讓畫面卡在
+     「檢查中」而且按鈕一直是停用的——看起來像當掉，其實只是沒人接。 */
+  if(!NAS.user||!NAS.pass)
+    return Promise.resolve({ok:false,wrote:false,
+      err:"還沒填 NAS 帳號密碼，請到設定頁第 4 區填好再回來。"});
+  var name="_probe_"+fmtFile(new Date())+"_"+
+    Math.random().toString(36).slice(2,8)+".txt";
+  var sid=null, wrote=false;
+  return synoLogin().then(function(s){
+    sid=s;
+    var blob=new Blob(["描圖權限檢查，可以直接刪除。\n"+new Date().toISOString()],
+      {type:"text/plain;charset=utf-8"});
+    return synoUpload(sid,{dest:DGM_DIR,blob:blob,name:name});
+  }).then(function(){
+    wrote=true;
+    return synoDelete(sid,DGM_DIR+"/"+name).catch(function(e){
+      // 寫得進去就代表有權限；刪不掉只是留一個小檔案，不該判定成沒權限
+      return {leftover:name,why:e.message};
+    });
+  }).then(function(r){
+    return {ok:true,leftover:r&&r.leftover?r:null};
+  }).catch(function(e){
+    return {ok:false,wrote:wrote,err:e.message};
+  }).then(function(r){
+    if(sid) synoLogout(sid);
+    return r;
+  });
 }
 function synoLogout(sid){
   var body=new URLSearchParams({api:"SYNO.API.Auth",version:"6",method:"logout",session:"FileStation",_sid:sid});
@@ -3500,7 +3697,7 @@ function renderDgmState(){
   var g=gridFor(S.area);
   if(g&&g.blocks&&g.blocks.length){
     var tot=0, ss=0;
-    g.blocks.forEach(function(b){ tot+=b.rows*b.cols;
+    g.blocks.forEach(function(b){ tot+=blockCells(b);   // 挖掉的格子不算片數
       ss+=(b.strings||[]).reduce(function(a,x){return a+x.n;},0); });
     body+="<br><b>模組網格：</b>"+g.blocks.length+" 個區塊、共 "+tot+" 片"+
       (ss?("，已分串 "+ss+" 片"):"，還沒填各串片數");
@@ -3701,6 +3898,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
     Array.prototype.forEach.call(document.querySelectorAll(".page"),function(p){p.classList.remove("on");});
     $(t.dataset.p).classList.add("on");
     if(t.dataset.p==="pSet") updateQuota();
+    else if(t.dataset.p==="pTrace") renderTrace();
     // 離開設定頁就結束偵測。忘了按「停止偵測」而回到拍照頁的話，
     // 遙控器的按鍵會一直被當成學習用而不拍照——很難聯想到原因。
     else if(learning) stopLearn(true);
@@ -3709,7 +3907,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-20a";
+var APP_VERSION="2026-11-20b";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3984,6 +4182,8 @@ window.__pv={
   _renderGrid:renderPanelGrid, _panelLabel:panelLabel,
   _blockCells:blockCells, _toggleHole:edToggleHole,
   _setGrid:function(a,g){ gridSaved[gridKey(a)]=g; return saveGrids(); },
+  _renderTrace:renderTrace, _trcAreas:trcAreas, _probeWrite:nasProbeWrite,
+  get _trcOk(){ return trcOk; }, _setTrcOk:function(v){ trcOk=!!v; renderTrace(); },
   get pick(){ return pick?JSON.parse(JSON.stringify(pick)):null; },
   _setZoom:function(k,tx,ty){ dgmK=k; if(tx!=null)dgmTx=tx; if(ty!=null)dgmTy=ty; dgmDraw(); },
   get _dgmK(){ return dgmK; }, _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
