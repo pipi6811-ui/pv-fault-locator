@@ -137,6 +137,10 @@
     cursor:pointer;}
   .dgm-grid .cell.on{fill:rgba(214,59,47,.18);stroke:#d63b2f;stroke-width:5;
     stroke-linejoin:round;}
+  /* 挖掉的格子（這裡沒有板子）。只在校正模式看得到——現場模式直接不畫，
+     點不到也不會被編號。灰底虛線是要讓描圖的人一眼看出「我挖過這裡」。 */
+  .dgm-grid .cell.hole{fill:rgba(120,120,120,.30);stroke:rgba(80,80,80,.85);
+    stroke-width:2;stroke-dasharray:6 4;}
   /* ── 校正模式 ── */
   .dgm-h{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;
     border-radius:50%;background:rgba(0,120,255,.3);border:3px solid #0a64c8;
@@ -773,6 +777,11 @@
       <label>列(橫)</label><input class="num" id="edRows" type="number" min="1" max="60">
       <label>行(直)</label><input class="num" id="edCols" type="number" min="1" max="60">
       <span id="edTotal" style="font-size:12px"></span>
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="edHole"> 挖空模式</label>
+      <span class="hint2" style="flex:1">點格子＝這裡沒有板子，再點一次填回來</span>
+      <button class="b2 b-sm" id="edHoleClear" type="button">全部填回</button>
     </div>
     <div class="row">
       <label>編號順序</label>
@@ -2523,6 +2532,15 @@ function quadAt(q,u,v){
 }
 /* 把格子排成一條順序。major 決定先走列還是先走行，
    snake 決定每走完一排要不要折返（蛇行配線就是這樣跑的）。 */
+/* 挖掉的格子：b.skip 是 ["列,行", ...]，0 起算，跟 cellOrder／cellIds 同一套座標。
+   屋頂常常不是完整矩形（階梯狀邊緣、天窗、管道），硬用一個矩形框會多出格子；
+   拆成好幾個小框又很煩，所以改成「框大一點，再把沒有板子的格子點掉」。 */
+function skipSet(b){
+  var s={};
+  (b&&b.skip||[]).forEach(function(k){ s[k]=1; });
+  return s;
+}
+function blockCells(b){ return b.rows*b.cols-((b&&b.skip||[]).length); }
 function cellOrder(b){
   var out=[], r, c, i;
   if(b.major==="col"){
@@ -2540,7 +2558,10 @@ function cellOrder(b){
       }
     }
   }
-  return out;
+  /* 挖掉的格子要從順序裡拿掉，不能只是不畫出來——留著的話串號會被
+     空格吃掉一個編號，後面每一片的片號就全部往後錯一位。 */
+  var sk=skipSet(b);
+  return out.filter(function(rc){ return !sk[rc[0]+","+rc[1]]; });
 }
 // 每一格配到哪一串、是該串第幾片
 function cellIds(b){
@@ -2693,21 +2714,26 @@ function renderPanelGrid(){
   host.setAttribute("viewBox","0 0 "+W+" "+H);
   var NS="http://www.w3.org/2000/svg", n=0;
   (g.blocks||[]).forEach(function(b){
-    var ids=cellIds(b);
+    var ids=cellIds(b), sk=skipSet(b);
     for(var r=0;r<b.rows;r++) for(var c=0;c<b.cols;c++){
+      var hole=!!sk[r+","+c];
+      /* 現場模式完全不畫挖掉的格子——點不到才不會誤標。
+         校正模式要畫出來（灰底虛線），不然挖錯了沒辦法點回來。 */
+      if(hole&&!edit) continue;
       var pts=[[c/b.cols,r/b.rows],[(c+1)/b.cols,r/b.rows],
                [(c+1)/b.cols,(r+1)/b.rows],[c/b.cols,(r+1)/b.rows]]
         .map(function(uv){ var p=quadAt(b.quad,uv[0],uv[1]);
                            return (p[0]*W).toFixed(1)+","+(p[1]*H).toFixed(1); });
       var el=document.createElementNS(NS,"polygon");
       el.setAttribute("points",pts.join(" "));
-      el.setAttribute("class","cell");
+      el.setAttribute("class",hole?"cell hole":"cell");
       var hit=ids.map[r+","+c];
-      el.__p={block:b.id,row:r+1,col:c+1,
+      el.__p={block:b.id,row:r+1,col:c+1,hole:hole,
               str:hit?hit.str:"",no:hit?hit.no:0};
       var mid=quadAt(b.quad,(c+0.5)/b.cols,(r+0.5)/b.rows);
       el.__p.cx=mid[0]; el.__p.cy=mid[1];
-      host.appendChild(el); n++;
+      host.appendChild(el);
+      if(!hole) n++;
     }
   });
   return n;
@@ -2804,7 +2830,14 @@ function dgmXY(e){
     dgmDownXY=null;
     /* 有網格的案場就一定要點到某一片。用瀏覽器的命中判定去問那個點底下
        是哪個多邊形——四邊形再歪斜也不會算錯，也省掉反解雙線性插值。 */
-    if(edit) return;                           // 校正模式只拖角，不選片
+    /* 校正模式平常只拖角、不選片；開了挖空模式才改成「點一下切換這一格」。
+       挖空也要用命中判定，理由跟選片一樣：四邊形歪斜時自己算會算錯。 */
+    if(edit){
+      if(!$("edHole").checked) return;
+      var h2=document.elementFromPoint(e.clientX,e.clientY);
+      if(h2&&h2.classList&&h2.classList.contains("cell")) edToggleHole(h2.__p);
+      return;
+    }
     if(gridFor(S.area)){
       var hit=document.elementFromPoint(e.clientX,e.clientY);
       if(hit&&hit.classList&&hit.classList.contains("cell")) selectCell(hit);
@@ -2915,7 +2948,7 @@ function edCur(){ return edBlocks()[edIdx]||null; }
 function edNewBlock(){
   var n=edBlocks().length;
   return {id:String.fromCharCode(65+n),rows:4,cols:6,major:"row",snake:true,
-          quad:[[0.3,0.3],[0.7,0.3],[0.7,0.6],[0.3,0.6]],strings:[]};
+          quad:[[0.3,0.3],[0.7,0.3],[0.7,0.6],[0.3,0.6]],strings:[],skip:[]};
 }
 function parseStrings(t){
   var out=[];
@@ -2943,11 +2976,22 @@ function edSyncForm(){
   $("edStrings").value=fmtStrings(b.strings);
   edSummary();
 }
+/* 點一下切換某一格有沒有板子。只動目前選到的區塊——
+   區塊會重疊的時候，命中判定可能回到別塊的格子，那不該被改。 */
+function edToggleHole(p){
+  var b=edCur(); if(!b||!p||p.block!==b.id) return;
+  var key=(p.row-1)+","+(p.col-1);
+  b.skip=b.skip||[];
+  var i=b.skip.indexOf(key);
+  if(i<0) b.skip.push(key); else b.skip.splice(i,1);
+  edSummary(); renderPanelGrid();
+}
 function edSummary(){
   var b=edCur(); if(!b) return;
-  var cells=b.rows*b.cols;
+  var cells=blockCells(b);
+  var holes=(b.skip||[]).length;
   var used=(b.strings||[]).reduce(function(a,s){ return a+s.n; },0);
-  $("edTotal").textContent="= "+cells+" 片";
+  $("edTotal").textContent="= "+cells+" 片"+(holes?"（挖掉 "+holes+" 格）":"");
   var msg="各串合計 "+used+" 片";
   if(used>cells) msg+="　<span class='warn2'>超過格數 "+cells+"，多的排不下</span>";
   else if(used<cells) msg+="　（還有 "+(cells-used)+" 格沒分配，點到會只有行列沒有串名）";
@@ -2958,6 +3002,11 @@ function edApplyForm(){
   var b=edCur(); if(!b) return;
   b.rows=Math.max(1,Math.min(60,parseInt($("edRows").value,10)||1));
   b.cols=Math.max(1,Math.min(60,parseInt($("edCols").value,10)||1));
+  /* 行列數改小的時候，掉到範圍外的挖空要丟掉。留著的話存檔會帶著
+     一堆指不到任何格子的座標，之後再把行列數加回來又會突然冒出洞。 */
+  if(b.skip&&b.skip.length) b.skip=b.skip.filter(function(k){
+    var a=k.split(","); return +a[0]<b.rows&&+a[1]<b.cols;
+  });
   b.major=$("edMajor").value;
   b.snake=$("edSnake").checked;
   b.strings=parseStrings($("edStrings").value);
@@ -3032,6 +3081,8 @@ function openEditor(){
   $("dgmEdit").classList.remove("hidden");
   $("btnDgmOk").classList.add("hidden");
   $("btnDgmSave").classList.remove("hidden");
+  // 每次進來都從「拖角」開始，免得上次關掉時還停在挖空模式，一點就挖洞
+  $("edHole").checked=false;
   $("brkDgmTip").innerHTML="<b>校正模式</b>　拖藍點圈出一塊，下面填幾列幾行。";
 }
 function closeEditor(save){
@@ -3059,6 +3110,17 @@ function closeEditor(save){
 $("edBlock").addEventListener("change",function(){
   edApplyForm(); edIdx=parseInt($("edBlock").value,10)||0;
   edSyncForm(); renderPanelGrid(); edHandles();
+});
+$("edHole").addEventListener("change",function(){
+  $("brkDgmTip").innerHTML=this.checked
+    /* 藍點是獨立的 div，命中判定會先打到它，不會變成挖空，
+       所以挖空模式下四個角照樣拖得動——不要叫人先關掉。 */
+    ? "<b>挖空模式</b>　點格子＝這裡沒有板子，再點一次填回來。四個角一樣拖得動。"
+    : "<b>校正模式</b>　拖藍點圈出一塊，下面填幾列幾行。";
+});
+$("edHoleClear").addEventListener("click",function(){
+  var b=edCur(); if(!b||!(b.skip||[]).length) return;
+  b.skip=[]; edSummary(); renderPanelGrid();
 });
 $("edAdd").addEventListener("click",function(){
   edApplyForm(); edBlocks().push(edNewBlock()); edIdx=edBlocks().length-1;
@@ -3703,7 +3765,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-19f";
+var APP_VERSION="2026-11-20a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -3976,6 +4038,8 @@ window.__pv={
   get _grids(){ return JSON.parse(JSON.stringify(gridSaved)); },
   _gridFor:gridFor, _cellIds:cellIds, _cellOrder:cellOrder, _quadAt:quadAt,
   _renderGrid:renderPanelGrid, _panelLabel:panelLabel,
+  _blockCells:blockCells, _toggleHole:edToggleHole,
+  _setGrid:function(a,g){ gridSaved[gridKey(a)]=g; return saveGrids(); },
   get pick(){ return pick?JSON.parse(JSON.stringify(pick)):null; },
   _setZoom:function(k,tx,ty){ dgmK=k; if(tx!=null)dgmTx=tx; if(ty!=null)dgmTy=ty; dgmDraw(); },
   get _dgmK(){ return dgmK; }, _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
