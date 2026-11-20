@@ -850,8 +850,15 @@
       <label>區塊</label>
       <select id="edBlock"></select>
       <button class="b2 b-sm" id="edAdd" type="button">新增</button>
+      <button class="b2 b-sm" id="edDup" type="button">複製</button>
       <button class="b2 b-sm b-danger" id="edDel" type="button">刪除</button>
     </div>
+    <p class="hint2" id="edDupHint">
+      一排一樣的區塊不必一個一個拉：拉好第一個，按<b>複製</b>，
+      把它拖到位，之後每按一次複製都會照同樣的間距接下去。<br>
+      <b>整塊搬動</b>就在區塊裡面按著拖；電腦上可以用<b>方向鍵</b>微調
+      （按住 Shift 一次走 10 格）。
+    </p>
     <p class="hint2">
       拖動圖上四個藍點圈出這一塊的範圍，再填切成幾列幾行。
       右邊的預覽會即時跟著變，對齊了再存。
@@ -2779,7 +2786,8 @@ function closeAsk(){ $("brkAsk").classList.remove("on"); camResume(); }
 
 /* ── 串併圖檢視：拖曳、兩指縮放、點選 ── */
 var dgmImg=null, dgmK=1, dgmTx=0, dgmTy=0, dgmPt={}, dgmMark=null,
-    dgmDownAt=0, dgmDownXY=null, dgmPinch=0;
+    dgmDownAt=0, dgmDownXY=null, dgmPinch=0,
+    dgmDragBlk=null;   // 這一次按下去是在搬整塊（而不是平移畫面）
 function dgmDraw(){
   $("brkDgmLayer").style.transform=
     "translate("+dgmTx+"px,"+dgmTy+"px) scale("+dgmK+")";
@@ -2940,8 +2948,19 @@ function dgmXY(e){
     w.setPointerCapture(e.pointerId);
     dgmPt[e.pointerId]={x:e.clientX,y:e.clientY};
     var n=Object.keys(dgmPt).length;
-    if(n===1){ dgmDownAt=Date.now(); dgmDownXY={x:e.clientX,y:e.clientY}; }
-    if(n===2){ dgmPinch=pinchDist(); dgmDownXY=null; }
+    if(n===1){
+      dgmDownAt=Date.now(); dgmDownXY={x:e.clientX,y:e.clientY};
+      /* 校正模式下，從「目前這一塊」裡面開始拖＝搬整塊，其他地方還是平移畫面。
+         只認目前選到的那一塊：區塊重疊時才不會手一滑搬到別塊。
+         用命中判定問那一點底下是哪個多邊形，跟選片、挖空同一套。 */
+      dgmDragBlk=null;
+      if(edit&&edCur()){
+        var h=document.elementFromPoint(e.clientX,e.clientY);
+        if(h&&h.classList&&h.classList.contains("cell")&&h.__p&&h.__p.block===edCur().id)
+          dgmDragBlk=true;
+      }
+    }
+    if(n===2){ dgmPinch=pinchDist(); dgmDownXY=null; dgmDragBlk=null; }
   });
   w.addEventListener("pointermove",function(e){
     if(!dgmPt[e.pointerId]||!dgmImg) return;
@@ -2949,6 +2968,12 @@ function dgmXY(e){
     dgmPt[e.pointerId]={x:e.clientX,y:e.clientY};
     var ids=Object.keys(dgmPt);
     if(ids.length===1){
+      if(dgmDragBlk){
+        // 螢幕上的位移換算回圖上的相對座標，縮放多少都跟手
+        edMove((e.clientX-prev.x)/dgmK/dgmImg.naturalWidth,
+               (e.clientY-prev.y)/dgmK/dgmImg.naturalHeight);
+        return;
+      }
       dgmTx+=e.clientX-prev.x; dgmTy+=e.clientY-prev.y; dgmDraw();
     }else if(ids.length===2&&dgmPinch){
       var d=pinchDist();
@@ -2989,9 +3014,20 @@ function dgmXY(e){
     if(p.x<0||p.x>1||p.y<0||p.y>1) return;   // 點到圖外不算
     dgmMark=p; dgmDraw(); $("btnDgmOk").disabled=false;
   }
-  w.addEventListener("pointerup",up);
+  w.addEventListener("pointerup",function(e){ dgmDragBlk=null; up(e); });
   w.addEventListener("pointercancel",function(e){
-    delete dgmPt[e.pointerId]; dgmPinch=0; dgmDownXY=null;
+    delete dgmPt[e.pointerId]; dgmPinch=0; dgmDownXY=null; dgmDragBlk=null;
+  });
+  /* 方向鍵微調（電腦）。拉到差一兩個像素時，滑鼠很難再準，鍵盤可以。
+     一次推一個圖上像素，Shift 一次 10 個。 */
+  document.addEventListener("keydown",function(e){
+    if(!edit||!edCur()||!dgmImg) return;
+    if(e.target&&/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+    var d={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    if(!d) return;
+    e.preventDefault();
+    var step=e.shiftKey?10:1;
+    edMove(d[0]*step/dgmImg.naturalWidth,d[1]*step/dgmImg.naturalHeight);
   });
   function pinchDist(){
     var a=Object.keys(dgmPt).map(function(k){return dgmPt[k];});
@@ -3091,6 +3127,71 @@ function edNewBlock(){
   var n=edBlocks().length;
   return {id:String.fromCharCode(65+n),rows:4,cols:6,major:"row",snake:true,
           quad:[[0.3,0.3],[0.7,0.3],[0.7,0.6],[0.3,0.6]],strings:[],skip:[]};
+}
+/* 複製一個區塊。
+
+   一排一樣的區塊（像廣興國小屋頂上那 12 組）一個一個拉四個角，等於拉 48 次，
+   而它們的形狀其實完全一樣，差的只是位置。所以複製要連「位移」一起猜：
+
+     第一次複製 → 往自己的寬度方向推一個身位（最接近「接在隔壁」）
+     之後      → 重複上一次的間距（最後兩塊的位移差）
+
+   意思是：拉好第一塊、複製、拖到正確位置（那一下就定義了間距），
+   接下來每按一次複製就自動落在對的地方，不必再拖。
+   屋頂上的女兒牆間距通常是固定的，所以這個猜法命中率很高；猜不中就再拖，
+   拖完的那個間距又會變成下一次的依據。 */
+function edDupDelta(){
+  var bs=edBlocks(), n=bs.length;
+  if(n>=2){
+    var a=bs[n-2], b=bs[n-1];
+    // 形狀一樣才算是「同一排的重複」，不然沿用它的間距沒有意義
+    if(a.rows===b.rows&&a.cols===b.cols){
+      var dx=b.quad[0][0]-a.quad[0][0], dy=b.quad[0][1]-a.quad[0][1];
+      if(Math.abs(dx)>1e-4||Math.abs(dy)>1e-4) return [dx,dy];
+    }
+  }
+  var c=edCur();
+  if(!c) return [0.02,0.02];
+  // 沒有前例就推一個身位：沿著上緣的方向，剛好接在隔壁
+  return [c.quad[1][0]-c.quad[0][0], c.quad[1][1]-c.quad[0][1]];
+}
+function edNextId(base){
+  var used={}; edBlocks().forEach(function(b){ used[b.id]=1; });
+  var m=/^(.*?)(\d+)$/.exec(base||"");
+  var stem=m?m[1]:(base||"A"), k=m?parseInt(m[2],10):1;
+  // 「B棟-1」→「B棟-2」；沒有數字結尾就從 2 開始接
+  for(var i=0;i<400;i++){
+    var id=stem+(k+1+i);
+    if(!used[id]) return id;
+  }
+  return (base||"A")+"-複製";
+}
+/* 整塊平移：先把位移量夾住，再四個角一起走。
+
+   夾的是「位移量」不是「每個角」——逐角去夾的話，先撞到邊界的那一角會停住、
+   其他角繼續走，整塊就被壓扁了（複製到最右邊時會縮成寬度 0）。
+   格子落在圖外等於點不到，所以寧可整塊停在邊界，也不要讓它半截掛在外面。 */
+function shiftQuad(q,dx,dy){
+  var xs=q.map(function(p){return p[0];}), ys=q.map(function(p){return p[1];});
+  dx=Math.max(-Math.min.apply(null,xs),Math.min(dx,1-Math.max.apply(null,xs)));
+  dy=Math.max(-Math.min.apply(null,ys),Math.min(dy,1-Math.max.apply(null,ys)));
+  return {dx:dx,dy:dy,quad:q.map(function(p){ return [p[0]+dx,p[1]+dy]; })};
+}
+function edDup(){
+  var c=edCur(); if(!c) return;
+  var d=edDupDelta();
+  var copy=JSON.parse(JSON.stringify(c));   // 深拷貝：skip／strings 要各自獨立
+  copy.id=edNextId(c.id);
+  copy.quad=shiftQuad(c.quad,d[0],d[1]).quad;
+  edBlocks().push(copy); edIdx=edBlocks().length-1;
+  edSyncForm(); renderPanelGrid(); edHandles();
+}
+function edMove(dx,dy){
+  var b=edCur(); if(!b) return;
+  var s=shiftQuad(b.quad,dx,dy);
+  if(!s.dx&&!s.dy) return;
+  b.quad=s.quad;
+  renderPanelGrid(); edHandles();
 }
 function parseStrings(t){
   var out=[];
@@ -3271,6 +3372,7 @@ $("edHoleClear").addEventListener("click",function(){
   var b=edCur(); if(!b||!(b.skip||[]).length) return;
   b.skip=[]; edSummary(); renderPanelGrid();
 });
+$("edDup").addEventListener("click",function(){ edApplyForm(); edDup(); });
 $("edAdd").addEventListener("click",function(){
   edApplyForm(); edBlocks().push(edNewBlock()); edIdx=edBlocks().length-1;
   edSyncForm(); renderPanelGrid(); edHandles();
@@ -4092,7 +4194,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-20c";
+var APP_VERSION="2026-11-20d";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
@@ -4366,6 +4468,9 @@ window.__pv={
   _gridFor:gridFor, _cellIds:cellIds, _cellOrder:cellOrder, _quadAt:quadAt,
   _renderGrid:renderPanelGrid, _panelLabel:panelLabel,
   _blockCells:blockCells, _toggleHole:edToggleHole,
+  _edDup:edDup, _edMove:edMove, _edDupDelta:edDupDelta, _edNextId:edNextId,
+  _edBlocks:function(){ return JSON.parse(JSON.stringify(edBlocks())); },
+  _edSelect:function(i){ edIdx=i; edSyncForm(); renderPanelGrid(); edHandles(); },
   _setGrid:function(a,g){ gridSaved[gridKey(a)]=g; return saveGrids(); },
   _renderTrace:renderTrace, _trcAreas:trcAreas, _probeWrite:nasProbeWrite,
   get _trcOk(){ return trcOk; }, _setTrcOk:function(v){ trcOk=!!v; renderTrace(); },
@@ -4375,7 +4480,8 @@ window.__pv={
   _setPubGrid:function(a,g){ gridPub[gridKey(a)]=g; return savePubGrids(); },
   get pick(){ return pick?JSON.parse(JSON.stringify(pick)):null; },
   _setZoom:function(k,tx,ty){ dgmK=k; if(tx!=null)dgmTx=tx; if(ty!=null)dgmTy=ty; dgmDraw(); },
-  get _dgmK(){ return dgmK; }, _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
+  get _dgmK(){ return dgmK; }, get _dgmTx(){ return dgmTx; }, get _dgmTy(){ return dgmTy; },
+  _setDiagram:function(a,u){ DIAGRAMS[a]=u; renderDgmState(); },
   _askBreak:askBreakLoc, _openDgm:openDiagram, _confirmMark:confirmMark,
   _brkFinish:brkFinish, _brkCancel:brkCancel, _brkDir:brkDir,
   get brk(){ return brk?JSON.parse(JSON.stringify(brk)):null; },
