@@ -56,7 +56,15 @@
   .hidden{display:none!important;}
 
   .now{border:2px solid var(--ink);border-radius:12px;background:var(--hazard);
-    padding:10px 14px;margin-bottom:10px;}
+    padding:10px 14px;margin-bottom:10px;position:relative;padding-right:118px;}
+  /* 右上角的 AI 開關。戴手套也要按得到，所以整塊都是觸控區（44px 高），
+     文字跟底色一樣是深色系，不要在黃底上用灰字。 */
+  .now-ai{position:absolute;top:6px;right:8px;display:flex;align-items:center;
+    gap:6px;min-height:44px;padding:0 6px;cursor:pointer;user-select:none;}
+  .now-ai input{width:22px;height:22px;accent-color:var(--ink);margin:0;}
+  .now-ai span{font-size:13px;font-weight:800;color:#5a4a06;white-space:nowrap;}
+  /* 關掉時整塊變淡，一眼看得出現在是關的 */
+  .now-ai.off span{opacity:.55;}
   .now-k{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.14em;color:#5a4a06;}
   .now-v{font-size:28px;font-weight:800;line-height:1.15;letter-spacing:-.02em;margin-top:1px;word-break:break-all;}
   .now-meta{font-size:12.5px;font-weight:700;color:#5a4a06;margin-top:3px;}
@@ -295,7 +303,7 @@
       height:calc(100dvh - 52px);
     }
     #pShoot > .cam{grid-area:cam;aspect-ratio:auto;height:100%;min-height:0;}
-    #pShoot > .now{grid-area:now;margin:0;padding:6px 10px;}
+    #pShoot > .now{grid-area:now;margin:0;padding:6px 10px;padding-right:106px;}
     #pShoot > .now .now-k{font-size:10px;letter-spacing:.1em;}
     #pShoot > .now .now-v{font-size:20px;}
     #pShoot > .now .now-meta{font-size:11px;margin-top:1px;}
@@ -346,6 +354,12 @@
     </div>
 
     <div class="now">
+      <!-- AI 開關放在這裡，是因為要開要關的時機都在拍照當下：辨識一直跳錯
+           就想立刻關掉，不該為了這件事跑去設定頁第 6 區再捲回來。
+           跟設定頁那個是同一個設定，改哪邊都一樣。 -->
+      <label class="now-ai" id="nowAiWrap">
+        <input id="nowAi" type="checkbox"><span>AI 自動選</span>
+      </label>
       <div class="now-k">浮水印的檢查項目</div>
       <div class="now-v" id="nowItem">—</div>
       <div class="now-meta" id="nowMeta">—</div>
@@ -4045,7 +4059,7 @@ function fillForms(){
   $("nRemember").checked=!!NAS.remember;
   $("sVib").checked=!!S.vib; $("sSnd").checked=!!S.snd;
   $("sTapShoot").checked=!!S.tapShoot; $("sFlash").checked=!!S.flash;
-  $("sAi").checked=aiOn(); renderAiState();
+  renderAiState();   // 兩個 AI 開關都在這裡面同步
   $("sBreakLoc").checked=S.breakLoc!==false; renderDgmState();
   renderOwnerSel(); renderItemsPreview(); renderPathPreview(); renderFbState();
   renderRemoteList(); renderCamList();
@@ -4115,10 +4129,17 @@ $("sFlash").addEventListener("change",function(){
 function renderAiState(){
   $("aiOffNote").classList.toggle("hidden",aiOn());
   aiChip(aiOn()&&(knn||model)?"AI 已就緒":"");
+  /* 兩個開關是同一個設定，所以每次都把兩邊都設回去——只更新被按的那一個，
+     另一邊就會停在舊狀態，下次看到會以為自己記錯了。 */
+  $("sAi").checked=aiOn();
+  $("nowAi").checked=aiOn();
+  $("nowAiWrap").classList.toggle("off",!aiOn());
 }
-$("sAi").addEventListener("change",function(){
-  S.ai=$("sAi").checked; writeJSON(SET_KEY,S); renderAiState();
-});
+function setAi(on){
+  S.ai=!!on; writeJSON(SET_KEY,S); renderAiState();
+}
+$("sAi").addEventListener("change",function(){ setAi(this.checked); });
+$("nowAi").addEventListener("change",function(){ setAi(this.checked); });
 $("sBreakLoc").addEventListener("change",function(){
   S.breakLoc=$("sBreakLoc").checked; writeJSON(SET_KEY,S);
 });
@@ -4356,7 +4377,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-24a";
+var APP_VERSION="2026-11-25a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
