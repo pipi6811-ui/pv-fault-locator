@@ -372,11 +372,11 @@
         <div class="btnrow">
           <button class="b2 b-sm" id="btnFlip" type="button">切換鏡頭</button>
         </div>
-        <p class="hint" id="tapNote">取景畫面整塊都可以按著拍照（設定頁第 3 區可關）。</p>
+        <p class="hint" id="tapNote">取景畫面整塊都可以按著拍照（設定頁第 4 區可關）。</p>
         <p class="hint" id="zoomNote">變焦方式：檢查中…</p>
         <p class="hint" id="remoteHint">
           藍牙快門遙控器可直接按下拍照。按了沒反應的話，到設定頁
-          <b>第 10 區</b>按「偵測遙控器按鍵」，把每顆都按一遍看收不收得到。
+          <b>第 11 區</b>按「偵測遙控器按鍵」，把每顆都按一遍看收不收得到。
           手機自己的音量鍵無法用於網頁，這是 iOS 與 Android 的限制。
         </p>
       </div>
@@ -466,7 +466,53 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">3</span><h2>拍照操作與回饋</h2></div>
+      <div class="sec-head"><span class="num">3</span><h2>破片定位</h2></div>
+      <div class="sec-body">
+        <div class="field">
+          <label class="chk"><input id="sBreakLoc" type="checkbox"><span>選到「破片」時問要不要定位</span></label>
+        </div>
+        <p class="hint" style="margin-top:0">
+          點「做定位」會打開這個案場的<b>串併圖</b>，用手指點出破片位置（兩指可放大），
+          接著引導你拍<b>破片外觀</b>和<b>模組序號</b>兩張。
+          三張圖加一份資料檔會送到 NAS 的 <code>98 破片管理</code>，
+          之後做破片管理系統時直接讀資料夾就有結構化資料。
+        </p>
+        <div class="note" id="dgmState"></div>
+        <div class="btnrow">
+          <button class="b1" id="btnPullDgm" type="button">取得這個案場的圖</button>
+          <button class="b2" id="btnEditGrid" type="button">校正模組網格</button>
+        </div>
+        <div class="btnrow">
+          <button class="b2" id="btnPullDgmAll" type="button">全部案場都抓（出發前先存）</button>
+        </div>
+        <p class="hint" style="margin-top:0">
+          平常按左邊那顆就好 —— <b>只抓目前這個案場</b>，案場再多也是一樣快。
+          要去沒訊號的地方、或一天要跑好幾個案場，出發前按「全部案場都抓」存起來。
+        </p>
+        <div class="note hidden" id="dgmPullState"></div>
+        <div class="note">
+          <b>新增案場的串併圖：</b>把檔案放到 NAS 的 <code>98 破片管理/_串併圖/</code>，
+          檔名就是案場名稱（例如 <code>三民國小.svg</code>），再按上面「取得這個案場的圖」。
+          <b>不必改程式，同事也只要各自按一次就拿得到。</b><br>
+          格式建議用 <b>SVG</b>（向量，放大不會糊）；png／jpg 也可以，但定位要放大時會模糊。
+          抓過一次就存在手機裡，之後沒訊號照樣打得開。
+        </div>
+        <p class="hint">
+          校正過之後，破片定位就不是點一個座標，而是<b>點到那一片</b>，
+          資料會記下是哪一串的第幾片。<b>蛇行方向每個案場不一樣</b>，
+          所以這件事要現場的人照實際配線設定，設定只存在這支手機裡。
+        </p>
+        <div class="note warn">
+          <b>圖要先抓過一次才會存在手機裡。</b>抓過就存著，屋頂上沒訊號照樣打得開 ——
+          定位正好是現場當下要做的事。<br>
+          沒抓過的案場只會提示沒辦法定位，<b>不影響平常拍照</b>。
+          所以換新案場、或聽到有人換了圖，記得在出發前先按一次。
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><span class="num">4</span><h2>拍照操作與回饋</h2></div>
       <div class="sec-body">
         <div class="field">
           <label class="chk"><input id="sTapShoot" type="checkbox"><span>點畫面也能拍照</span></label>
@@ -499,7 +545,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">4</span><h2>Synology NAS 上傳</h2></div>
+      <div class="sec-head"><span class="num">5</span><h2>Synology NAS 上傳</h2></div>
       <div class="sec-body">
         <div class="field">
           <label>照片會傳到這裡</label>
@@ -532,7 +578,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">5</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
+      <div class="sec-head"><span class="num">6</span><h2>AI 自動選項目（邊拍邊學）</h2></div>
       <div class="sec-body">
         <div class="field">
           <label class="chk"><input id="sAi" type="checkbox"><span>拍照時自動辨識並跳項目</span></label>
@@ -588,7 +634,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">6</span><h2>儲存空間</h2></div>
+      <div class="sec-head"><span class="num">7</span><h2>儲存空間</h2></div>
       <div class="sec-body">
         <div id="quotaText" style="font-size:13px;font-weight:600">計算中…</div>
         <div class="bar"><i id="quotaBar"></i></div>
@@ -601,7 +647,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">7</span><h2>離線可用</h2></div>
+      <div class="sec-head"><span class="num">8</span><h2>離線可用</h2></div>
       <div class="sec-body">
         <div class="note" id="swState"><b>狀態：</b>檢查中…</div>
         <div class="btnrow">
@@ -616,14 +662,14 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">8</span><h2>怎麼讓辨識變準</h2></div>
+      <div class="sec-head"><span class="num">9</span><h2>怎麼讓辨識變準</h2></div>
       <div class="sec-body">
         <div class="note">
           <b>1.</b> 先照平常方式工作。換標的物就點一下項目按鈕，這一點就是在教它。<br><br>
-          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 5 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
+          <b>2.</b> 每個項目累積到 <b>30 張以上</b>，回到第 6 區按<b>開始訓練</b>（第一次要連網下載辨識模型，約 16MB，之後離線可用）。<br><br>
           <b>3.</b> 訓練完會顯示<b>實測辨識率</b>——用沒拿去學的照片考出來的，不是自我感覺良好的數字。<br><br>
           <b>4.</b> 之後拍照就會自動跳項目。覺得變差就按<b>回上一版</b>；
-          完全不想讓它插手，就把第 5 區最上面的<b>自動辨識關掉</b>——樣本照收，
+          完全不想讓它插手，就把第 6 區最上面的<b>自動辨識關掉</b>——樣本照收，
           之後隨時可以再打開。
         </div>
         <div class="note warn">
@@ -637,7 +683,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">9</span><h2>鏡頭（廣角與望遠）</h2></div>
+      <div class="sec-head"><span class="num">10</span><h2>鏡頭（廣角與望遠）</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           拍照頁的 <b>0.5×</b> 與 <b>望遠</b> 都不是縮放，是<b>換一顆鏡頭</b>。
@@ -671,7 +717,7 @@
     </section>
 
     <section>
-      <div class="sec-head"><span class="num">10</span><h2>藍牙遙控器</h2></div>
+      <div class="sec-head"><span class="num">11</span><h2>藍牙遙控器</h2></div>
       <div class="sec-body">
         <p class="hint" style="margin-top:0">
           遙控器對手機來說就是一個鍵盤，但每一支送出的按鍵都不一樣。
@@ -713,44 +759,6 @@
       </div>
     </section>
 
-    <section>
-      <div class="sec-head"><span class="num">11</span><h2>破片定位</h2></div>
-      <div class="sec-body">
-        <div class="field">
-          <label class="chk"><input id="sBreakLoc" type="checkbox"><span>選到「破片」時問要不要定位</span></label>
-        </div>
-        <p class="hint" style="margin-top:0">
-          點「做定位」會打開這個案場的<b>串併圖</b>，用手指點出破片位置（兩指可放大），
-          接著引導你拍<b>破片外觀</b>和<b>模組序號</b>兩張。
-          三張圖加一份資料檔會送到 NAS 的 <code>98 破片管理</code>，
-          之後做破片管理系統時直接讀資料夾就有結構化資料。
-        </p>
-        <div class="note" id="dgmState"></div>
-        <div class="btnrow">
-          <button class="b1" id="btnPullDgm" type="button">從 NAS 取得串併圖</button>
-          <button class="b2" id="btnEditGrid" type="button">校正模組網格</button>
-        </div>
-        <div class="note hidden" id="dgmPullState"></div>
-        <div class="note">
-          <b>新增案場的串併圖：</b>把檔案放到 NAS 的 <code>98 破片管理/_串併圖/</code>，
-          檔名就是案場名稱（例如 <code>三民國小.svg</code>），再按上面「從 NAS 取得串併圖」。
-          <b>不必改程式，同事也只要各自按一次就拿得到。</b><br>
-          格式建議用 <b>SVG</b>（向量，放大不會糊）；png／jpg 也可以，但定位要放大時會模糊。
-          抓過一次就存在手機裡，之後沒訊號照樣打得開。
-        </div>
-        <p class="hint">
-          校正過之後，破片定位就不是點一個座標，而是<b>點到那一片</b>，
-          資料會記下是哪一串的第幾片。<b>蛇行方向每個案場不一樣</b>，
-          所以這件事要現場的人照實際配線設定，設定只存在這支手機裡。
-        </p>
-        <div class="note warn">
-          <b>串併圖是跟著程式走的</b>，不是從 NAS 抓 ——
-          屋頂上沒訊號也打得開，因為定位正好是現場當下要做的事。
-          代價是<b>新案場要先把圖加進程式</b>，沒有圖的案場只會提示沒辦法定位，
-          不影響平常拍照。
-        </div>
-      </div>
-    </section>
   </div>
 
   <!-- ══════════ 描圖 ══════════
@@ -766,7 +774,7 @@
         <button class="b1" id="btnTrcCheck" type="button">檢查寫入權限</button>
       </div>
       <p class="hint">
-        判定方式：用設定頁第 4 區的 NAS 帳號，往 <code>_串併圖</code> 寫一個
+        判定方式：用設定頁第 5 區的 NAS 帳號，往 <code>_串併圖</code> 寫一個
         <code>_probe_…</code> 檔再刪掉。寫得進去就是有權限。
       </p>
       <div class="note warn">
@@ -809,7 +817,7 @@
       <div class="note warn" id="trcScope">
         <b>描完要按「發佈這個案場的網格」</b>，同事才拿得到 ——
         存起來只是存在這台裝置裡。<br>
-        同事按一次「從 NAS 取得串併圖」就會連網格一起抓下來，
+        同事把維運區域切到這個案場，按一次「取得這個案場的圖」就會連網格一起抓下來，
         之後離線也打得開。<br>
         <b>公司版會蓋過每個人自己校正的版本</b>，這樣片號才會全公司一致。
       </div>
@@ -2424,6 +2432,128 @@ var SEEDS={
      圖是我們自己畫的（jd/draw.py），所以這四個角是跟著畫圖的座標算出來的，
      不是從圖上量的——只要用的是同一張 吉東國小.svg 就一定對齊，不必拖角。
      不填串：這個案場不需要串號，只要點得到是哪一片。 */
+  /* 祥利一期（祥利機械一期）：1720 片、498.8 kWp、9 台 SUNGROW SG50KTL-M。
+
+     跟前面幾個案場不同，這個案場有廠商的 CAD 迴路配置圖（竣工圖 R-9），
+     是正交的向量圖，不是斜角空拍。所以行列數是「量出來的」，不是估的。
+
+     量法：把 PDF 第 6 頁以 600dpi 轉成點陣，量模組的格線。
+     每一列模組在圖上是「25px 框線 + 60px 內部」的重複單元（節距 85px），
+     行節距 52.4px；兩者比值 1.65 正好是模組 D6M-290-B3A 的 1640:992。
+
+     結構：
+       第 1 排（最左）  32 列均勻，中間一條走道把行切成兩群，
+                        而且第 9 列起整排往左多一行：
+                          第 1~8 列   3 行 + 5 行 = 8 行
+                          第 9~32 列  4 行 + 5 行 = 9 行
+                        → 8×3 + 8×5 + 24×4 + 24×5 = 280 片
+       第 2~6 排        各 9 行 × 32 列，列是「每 4 列一組」，組間是維修走道
+                        → 一組一個區塊（8 個），8×(9×4) = 288 片／排
+
+     三個獨立來源互相對帳，都是 1720：
+       1. 格線幾何   5×288 + 280 = 1720
+       2. 圖上串號   第 1 排有 DC8-1~4（4串×24=96）與 DC9-1~8（8串×23=184）= 280
+       3. 規格表     INV01~08 各 24串8併=192、INV09 23串8併=184，合計 1720
+
+     驗收：1720 格裡有 1559 格（90.6%）抓得到圖上的接線點圓圈，
+     而偵測到的 1711 個圓圈只有 8 個落在格子外——落在格外的少，
+     代表格子是對齊的（對不準的話會有大量圓圈掉到格子外）。
+
+     不填串：圖上有 DC 編號，但一串 24 片是蛇行繞的，把 44 個區塊對回
+     各串要逐段追線，猜錯會讓片號安靜地錯。現場需要片號時再補。
+
+     一組一個區塊而不是一個 32 列的大框：組間有走道，用大框平均切 32 份
+     會讓格子逐漸偏掉。 */
+  "祥利一期":{blocks:[
+    {id:"第1排-上左",rows:8,cols:3,major:"row",snake:false,
+     quad:[[0.0423,0.0824],[0.0885,0.0824],[0.0885,0.3015],[0.0423,0.3015]],strings:[]},
+    {id:"第1排-上右",rows:8,cols:5,major:"row",snake:false,
+     quad:[[0.0979,0.0824],[0.1749,0.0824],[0.1749,0.3015],[0.0979,0.3015]],strings:[]},
+    {id:"第1排-下左",rows:24,cols:4,major:"row",snake:false,
+     quad:[[0.0269,0.3018],[0.0885,0.3018],[0.0885,0.9598],[0.0269,0.9598]],strings:[]},
+    {id:"第1排-下右",rows:24,cols:5,major:"row",snake:false,
+     quad:[[0.0979,0.3018],[0.1749,0.3018],[0.1749,0.9598],[0.0979,0.9598]],strings:[]},
+    {id:"第2排-1",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.0353],[0.3287,0.0353],[0.3287,0.1450],[0.1811,0.1450]],strings:[]},
+    {id:"第2排-2",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.1515],[0.3287,0.1515],[0.3287,0.2611],[0.1811,0.2611]],strings:[]},
+    {id:"第2排-3",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.2682],[0.3287,0.2682],[0.3287,0.3776],[0.1811,0.3776]],strings:[]},
+    {id:"第2排-4",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.3844],[0.3287,0.3844],[0.3287,0.4940],[0.1811,0.4940]],strings:[]},
+    {id:"第2排-5",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.5011],[0.3287,0.5011],[0.3287,0.6105],[0.1811,0.6105]],strings:[]},
+    {id:"第2排-6",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.6173],[0.3287,0.6173],[0.3287,0.7269],[0.1811,0.7269]],strings:[]},
+    {id:"第2排-7",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.7340],[0.3287,0.7340],[0.3287,0.8434],[0.1811,0.8434]],strings:[]},
+    {id:"第2排-8",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.1811,0.8502],[0.3287,0.8502],[0.3287,0.9598],[0.1811,0.9598]],strings:[]},
+    {id:"第3排-1",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.0353],[0.4831,0.0353],[0.4831,0.1450],[0.3385,0.1450]],strings:[]},
+    {id:"第3排-2",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.1515],[0.4831,0.1515],[0.4831,0.2611],[0.3385,0.2611]],strings:[]},
+    {id:"第3排-3",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.2682],[0.4831,0.2682],[0.4831,0.3776],[0.3385,0.3776]],strings:[]},
+    {id:"第3排-4",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.3844],[0.4831,0.3844],[0.4831,0.4940],[0.3385,0.4940]],strings:[]},
+    {id:"第3排-5",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.5011],[0.4831,0.5011],[0.4831,0.6105],[0.3385,0.6105]],strings:[]},
+    {id:"第3排-6",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.6173],[0.4831,0.6173],[0.4831,0.7269],[0.3385,0.7269]],strings:[]},
+    {id:"第3排-7",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.7340],[0.4831,0.7340],[0.4831,0.8434],[0.3385,0.8434]],strings:[]},
+    {id:"第3排-8",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.3385,0.8502],[0.4831,0.8502],[0.4831,0.9598],[0.3385,0.9598]],strings:[]},
+    {id:"第4排-1",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.0353],[0.6447,0.0353],[0.6447,0.1450],[0.4970,0.1450]],strings:[]},
+    {id:"第4排-2",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.1515],[0.6447,0.1515],[0.6447,0.2611],[0.4970,0.2611]],strings:[]},
+    {id:"第4排-3",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.2682],[0.6447,0.2682],[0.6447,0.3776],[0.4970,0.3776]],strings:[]},
+    {id:"第4排-4",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.3844],[0.6447,0.3844],[0.6447,0.4940],[0.4970,0.4940]],strings:[]},
+    {id:"第4排-5",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.5011],[0.6447,0.5011],[0.6447,0.6105],[0.4970,0.6105]],strings:[]},
+    {id:"第4排-6",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.6173],[0.6447,0.6173],[0.6447,0.7269],[0.4970,0.7269]],strings:[]},
+    {id:"第4排-7",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.7340],[0.6447,0.7340],[0.6447,0.8434],[0.4970,0.8434]],strings:[]},
+    {id:"第4排-8",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.4970,0.8502],[0.6447,0.8502],[0.6447,0.9598],[0.4970,0.9598]],strings:[]},
+    {id:"第5排-1",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.0353],[0.7991,0.0353],[0.7991,0.1450],[0.6544,0.1450]],strings:[]},
+    {id:"第5排-2",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.1515],[0.7991,0.1515],[0.7991,0.2611],[0.6544,0.2611]],strings:[]},
+    {id:"第5排-3",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.2682],[0.7991,0.2682],[0.7991,0.3776],[0.6544,0.3776]],strings:[]},
+    {id:"第5排-4",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.3844],[0.7991,0.3844],[0.7991,0.4940],[0.6544,0.4940]],strings:[]},
+    {id:"第5排-5",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.5011],[0.7991,0.5011],[0.7991,0.6105],[0.6544,0.6105]],strings:[]},
+    {id:"第5排-6",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.6173],[0.7991,0.6173],[0.7991,0.7269],[0.6544,0.7269]],strings:[]},
+    {id:"第5排-7",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.7340],[0.7991,0.7340],[0.7991,0.8434],[0.6544,0.8434]],strings:[]},
+    {id:"第5排-8",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.6544,0.8502],[0.7991,0.8502],[0.7991,0.9598],[0.6544,0.9598]],strings:[]},
+    {id:"第6排-1",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.0353],[0.9607,0.0353],[0.9607,0.1450],[0.8130,0.1450]],strings:[]},
+    {id:"第6排-2",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.1515],[0.9607,0.1515],[0.9607,0.2611],[0.8130,0.2611]],strings:[]},
+    {id:"第6排-3",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.2682],[0.9607,0.2682],[0.9607,0.3776],[0.8130,0.3776]],strings:[]},
+    {id:"第6排-4",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.3844],[0.9607,0.3844],[0.9607,0.4940],[0.8130,0.4940]],strings:[]},
+    {id:"第6排-5",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.5011],[0.9607,0.5011],[0.9607,0.6105],[0.8130,0.6105]],strings:[]},
+    {id:"第6排-6",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.6173],[0.9607,0.6173],[0.9607,0.7269],[0.8130,0.7269]],strings:[]},
+    {id:"第6排-7",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.7340],[0.9607,0.7340],[0.9607,0.8434],[0.8130,0.8434]],strings:[]},
+    {id:"第6排-8",rows:4,cols:9,major:"row",snake:false,
+     quad:[[0.8130,0.8502],[0.9607,0.8502],[0.9607,0.9598],[0.8130,0.9598]],strings:[]}
+  ]},
   "吉東國小":{blocks:[
     {id:"A棟",rows:30,cols:6,major:"row",snake:false,
      quad:[[0.4411,0.1720],[0.7732,0.1720],[0.7732,0.9422],[0.4411,0.9422]],strings:[]},
@@ -2578,12 +2708,20 @@ function downloadGrid(sid,f){
     return j;
   });
 }
-function pullGrids(onNote){
+/* area 帶了就只抓那個案場的網格，跟抓圖一樣——案場多的時候不必每次把
+   全部的 json 都拉下來。比對方式跟串併圖同一套（dgmFileMatches），
+   不然會出現「圖抓到了、網格卻因為名稱比對規則不同而沒抓到」。 */
+function pullGrids(onNote,area){
   var say=onNote||function(){};
   var got=0, names=[];
   return synoLogin().then(function(sid){
     say("查看公司版網格…");
     return listGridFiles(sid).then(function(files){
+      if(area){
+        var all=files.map(function(f){ return f.name.replace(/\.grid\.json$/i,""); });
+        files=files.filter(function(f){
+          return dgmFileMatches(f.name.replace(/\.grid\.json$/i,""),area,all); });
+      }
       return files.reduce(function(c,f){
         return c.then(function(){
           say("下載 "+f.name+" …");
@@ -2930,7 +3068,7 @@ function openDiagram(){
   im.onerror=function(){
     closeDiagram();
     alert("「"+(dp.name||S.area)+"」這張串併圖讀不出來，這次先用一般方式拍照。\n\n"+
-      "到設定頁第 11 區按一次「從 NAS 取得串併圖」重抓看看；\n"+
+      "到設定頁第 3 區按一次「取得這個案場的圖」重抓看看；\n"+
       "還是不行的話，多半是 NAS 上那個檔案本身有問題（不是真的 svg／png／jpg）。");
   };
   im.src=dp.uri;
@@ -3302,7 +3440,7 @@ function openEditor(){
     // 範本的四個角是照那個案場自己的圖量的，套到別張圖上片號全錯
     alert("現在顯示的是「"+blk.name+"」的串併圖，不是「"+S.area+"」的。\n\n"+
       "請先把這個案場的圖放到 NAS 的\n"+DGM_DIR+"\n（檔名就用案場名稱），"+
-      "再按「從 NAS 取得串併圖」。");
+      "再按「取得這個案場的圖」。");
     return;
   }
   edit=true; edIdx=0;
@@ -3470,7 +3608,12 @@ $("btnTrcOpen").addEventListener("click",function(){
   S.area=area; writeJSON(SET_KEY,S); fillForms();
   openEditor();
 });
-$("btnTrcPull").addEventListener("click",function(){ $("btnPullDgm").click(); });
+/* 描圖台抓的是「這一頁選的案場」，不是拍照頁的維運區域——描圖的人常常
+   在辦公室描 A 案場，而手機上的維運區域還停在昨天跑的 B 案場。
+   清單是空的（一張圖都還沒有）就只能全抓，不然沒有名字可以比對。 */
+$("btnTrcPull").addEventListener("click",function(){
+  doPullDgm($("trcArea").value||null,this,"trcPubState");
+});
 
 /* 發佈。NAS 上比手上這份新的時候不直接覆蓋，先講一次再給第二次機會——
    網格決定片號，蓋掉別人剛發佈的版本，現場會照著錯的片號去找模組。 */
@@ -3487,7 +3630,7 @@ $("btnTrcPublish").addEventListener("click",function(){
     if(r.ok){
       trcPubArmed=false;
       setNote($("trcPubState"),"<b>已發佈。</b>"+esc(gridFileName(area))+
-        " 已經在 "+esc(DGM_DIR)+"。同事按一次「從 NAS 取得串併圖」就會拿到。","ok");
+        " 已經在 "+esc(DGM_DIR)+"。同事把維運區域切到這個案場、按一次「取得這個案場的圖」就會拿到。","ok");
       renderTrace(); renderDgmState();
     }else if(r.stale){
       trcPubArmed=true;
@@ -3502,33 +3645,52 @@ $("btnTrcPublish").addEventListener("click",function(){
     }
   });
 });
-$("btnPullDgm").addEventListener("click",function(){
+/* 抓圖。預設只抓「目前這個案場」。
+
+   以前是一次把 NAS 上的全部抓下來。案場少的時候無所謂，但每多一個案場就
+   多下載一張圖（串併圖動輒幾百 KB），在屋頂上用手機網路會越來越久，而且
+   九成九是白抓的——現場當下只會用到一個案場。
+
+   要跑好幾個案場、或要去沒訊號的地方，出發前按「全部案場都抓」。
+   清單本身一次就列完（不分案場），貴的是下載，所以只過濾下載。 */
+function doPullDgm(area,btn,noteId){
+  // 訊息要寫在「按下按鈕的那一頁」——設定頁與描圖台各有自己的提示區，
+  // 寫錯地方的話，按了按鈕看起來像沒反應
+  var note=$(noteId||"dgmPullState");
   if(!NAS.user||!NAS.pass){
-    setNote($("dgmPullState"),"<b>請先到第 4 區填好 NAS 帳號密碼。</b>","warn");
+    setNote(note,"<b>請先到第 5 區填好 NAS 帳號密碼。</b>","warn");
     return;
   }
-  var btn=$("btnPullDgm"); btn.disabled=true;
-  var say=function(t){ setNote($("dgmPullState"),t); };
-  // 不帶案場＝把 NAS 上的全部抓下來，一次就讓所有案場都能用
-  pullDiagrams(null,say).then(function(r){
+  /* area 是空字串時絕對不能往下走。空字串是 falsy，傳給 pullDiagrams 會
+     被當成「不指定案場」＝全部抓——使用者按的是「這個案場」，結果卻把
+     整個 NAS 拉下來，正好是這次要避免的事。要全抓請按另一顆。 */
+  if(area!==null&&!safeFolder(area)){
+    setNote(note,"<b>還沒填維運區域。</b>到第 2 區填好，或按「全部案場都抓」。","warn");
+    return;
+  }
+  btn.disabled=true;
+  var say=function(t){ setNote(note,t); };
+  pullDiagrams(area,say).then(function(r){
     /* 順便把公司版網格抓下來。放在同一顆按鈕底下是刻意的：
        現場的人不會記得要按兩個地方，而圖和網格本來就要配成一對——
        只抓到圖沒抓到網格，點下去不會有紅框，看起來像功能壞掉。
        網格抓失敗不該讓整件事算失敗，圖本身已經拿到了。 */
-    return pullGrids(say).then(function(gr){
-      setNote($("dgmPullState"),
+    return pullGrids(say,area).then(function(gr){
+      setNote(note,
         "<b>取得 "+r.n+" 張串併圖 ✓</b><br>"+esc(r.names.join("、"))+
         (gr.n?("<br><b>公司版網格 "+gr.n+" 個案場 ✓</b><br>"+esc(gr.names.join("、")))
              :"<br>NAS 上還沒有公司版網格。"),"ok");
     }).catch(function(e){
-      setNote($("dgmPullState"),
+      setNote(note,
         "<b>取得 "+r.n+" 張串併圖 ✓</b><br>"+esc(r.names.join("、"))+
         "<br><b>但公司版網格沒抓到：</b>"+esc(e.message),"warn");
     }).then(function(){ renderDgmState(); renderTrace(); });
   }).catch(function(err){
-    setNote($("dgmPullState"),"<b>取得失敗：</b>"+errHtml(err),"bad");
+    setNote(note,"<b>取得失敗：</b>"+errHtml(err),"bad");
   }).then(function(){ btn.disabled=false; });
-});
+}
+$("btnPullDgm").addEventListener("click",function(){ doPullDgm(S.area,this); });
+$("btnPullDgmAll").addEventListener("click",function(){ doPullDgm(null,this); });
 
 $("btnBrkYes").addEventListener("click",openDiagram);
 $("btnBrkNo").addEventListener("click",closeAsk);
@@ -3720,7 +3882,7 @@ function nasProbeWrite(){
      「檢查中」而且按鈕一直是停用的——看起來像當掉，其實只是沒人接。 */
   if(!NAS.user||!NAS.pass)
     return Promise.resolve({ok:false,wrote:false,
-      err:"還沒填 NAS 帳號密碼，請到設定頁第 4 區填好再回來。"});
+      err:"還沒填 NAS 帳號密碼，請到設定頁第 5 區填好再回來。"});
   var name="_probe_"+fmtFile(new Date())+"_"+
     Math.random().toString(36).slice(2,8)+".txt";
   var sid=null, wrote=false;
@@ -3760,7 +3922,7 @@ function uploadSelected(){
     return;
   }
   if(!NAS.user||!NAS.pass){
-    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 4 區填好再上傳。","warn");
+    setNote($("actState"),"<b>還沒填 NAS 帳號密碼。</b>到設定頁第 5 區填好再上傳。","warn");
     return;
   }
   if(!safeFolder(S.area)){
@@ -3976,7 +4138,7 @@ function renderDgmState(){
     setNote($("dgmState"),body+"<br><b>這不是「"+esc(S.area)+"」自己的圖，"+
       "所以不能套用內建的網格範本</b>——範本的四個角是照這個案場的圖量的，"+
       "疊在別張圖上片號會是錯的。<br>把「"+esc(S.area)+"」的圖放到 NAS 的 "+
-      esc(DGM_DIR)+"（檔名就用案場名稱），再按下面「從 NAS 取得串併圖」。","warn");
+      esc(DGM_DIR)+"（檔名就用案場名稱），再按下面「取得這個案場的圖」。","warn");
     return;
   }
   var src=gridSource(S.area), g=src?src.grid:null;
@@ -4194,7 +4356,7 @@ Array.prototype.forEach.call(document.querySelectorAll(".tab"),function(t){
 });
 
 /* ═══════════ 離線快取 ═══════════ */
-var APP_VERSION="2026-11-20d";
+var APP_VERSION="2026-11-24a";
 $("ver").textContent="版本 "+APP_VERSION;
 
 function initSW(){
